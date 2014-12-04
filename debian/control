@@ -5,6 +5,7 @@ Maintainer: PKG OpenStack <openstack-devel@lists.alioth.debian.org>
 Uploaders: Thomas Goirand <zigo@debian.org>
 Build-Depends: debhelper (>= 9),
                dh-python,
+               openstack-pkg-tools,
                python-all (>= 2.6.6-3~),
                python-pbr,
                python-setuptools,
