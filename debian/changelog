@@ -1,0 +1,5 @@
+python-proliantutils (0.1.1-1) unstable; urgency=medium
+
+  * Initial release. (Closes: #772019)
+
+ -- Thomas Goirand <zigo@debian.org>  Thu, 04 Dec 2014 20:30:11 +0800

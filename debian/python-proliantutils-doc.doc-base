@@ -1,0 +1,9 @@
+Document: python-proliantutils-doc
+Title: proliantutils Documentation
+Author: N/A
+Abstract: Sphinx documentation for proliantutils
+Section: Programming/Python
+
+Format: HTML
+Index: /usr/share/doc/python-proliantutils-doc/html/index.html
+Files: /usr/share/doc/python-proliantutils-doc/html/*
