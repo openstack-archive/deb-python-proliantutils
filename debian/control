@@ -16,7 +16,7 @@ Build-Depends: debhelper (>= 9),
 Standards-Version: 3.9.6
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=openstack/python-proliantutils.git
 Vcs-Git: git://anonscm.debian.org/openstack/python-proliantutils.git
-Homepage: https://github.com/hpproliant/proliantutils
+Homepage: https://github.com/stackforge/proliantutils
 
 Package: python-proliantutils
 Architecture: all
