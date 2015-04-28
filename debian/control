@@ -13,6 +13,20 @@ Build-Depends: debhelper (>= 9),
                python3-all,
                python3-pbr,
                python3-setuptools
+Build-Depends-Indep: python-hacking,
+                     python-jsonschema (>= 2.4.0),
+                     python-mock,
+                     python-oslo.concurrency (>= 1.4.1),
+                     python-oslo.utils (>= 1.2.0),
+                     python-six (>= 1.9.0),
+                     python-testtools,
+                     python3-jsonschema (>= 2.4.0),
+                     python3-oslo.concurrency (>= 1.4.1),
+                     python3-oslo.utils (>= 1.2.0),
+                     python3-six (>= 1.9.0),
+                     python3-testtools,
+                     subunit,
+                     testrepository,
 Standards-Version: 3.9.6
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=openstack/python-proliantutils.git
 Vcs-Git: git://anonscm.debian.org/openstack/python-proliantutils.git
@@ -21,7 +35,12 @@ Homepage: https://github.com/stackforge/proliantutils
 Package: python-proliantutils
 Architecture: all
 Pre-Depends: dpkg (>= 1.15.6~)
-Depends: ${misc:Depends}, ${python:Depends}
+Depends: python-jsonschema (>= 2.4.0),
+         python-oslo.concurrency (>= 1.4.1),
+         python-oslo.utils (>= 1.2.0),
+         python-six (>= 1.9.0),
+         ${misc:Depends},
+         ${python:Depends},
 Suggests: python-proliantutils-doc
 Description: client lib interfacing various devices in HP Proliant Servers - Python 2.x
  Proliant Management Tools provides Python libraries for interfacing and
@@ -33,7 +52,12 @@ Description: client lib interfacing various devices in HP Proliant Servers - Pyt
 Package: python3-proliantutils
 Architecture: all
 Pre-Depends: dpkg (>= 1.15.6~)
-Depends: ${misc:Depends}, ${python3:Depends}
+Depends: python3-jsonschema (>= 2.4.0),
+         python3-oslo.concurrency (>= 1.4.1),
+         python3-oslo.utils (>= 1.2.0),
+         python3-six (>= 1.9.0),
+         ${misc:Depends},
+         ${python3:Depends},
 Suggests: python-proliantutils-doc
 Description: client lib interfacing various devices in HP Proliant Servers - Python 3.x
  Proliant Management Tools provides Python libraries for interfacing and

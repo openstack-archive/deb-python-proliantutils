@@ -1,6 +1,7 @@
 python-proliantutils (2.1.0-1) unstable; urgency=medium
 
   * New upstream release.
+  * Reviewed (build-)depends.
 
  -- Thomas Goirand <zigo@debian.org>  Tue, 28 Apr 2015 21:39:16 +0000
 
