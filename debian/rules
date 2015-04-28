@@ -1,24 +1,24 @@
 #!/usr/bin/make -f
 
 PYTHONS:=$(shell pyversions -vr)
-PYTHON3S:=$(shell py3versions -vr)
+#PYTHON3S:=$(shell py3versions -vr)
 
 UPSTREAM_GIT = git://github.com/stackforge/proliantutils.git
 include /usr/share/openstack-pkg-tools/pkgos.make
 export OSLO_PACKAGE_VERSION=$(VERSION)
 
 %:
-	dh $@ --buildsystem=python_distutils --with python2,python3,sphinxdoc
+	dh $@ --buildsystem=python_distutils --with python2,sphinxdoc
 
 override_dh_install:
 	set -e ; for pyvers in $(PYTHONS); do \
 		python$$pyvers setup.py install --install-layout=deb \
 			--root $(CURDIR)/debian/python-proliantutils; \
 	done
-	set -e ; for pyvers in $(PYTHON3S); do \
-		python$$pyvers setup.py install --install-layout=deb \
-			--root $(CURDIR)/debian/python3-proliantutils; \
-	done
+#	set -e ; for pyvers in $(PYTHON3S); do \
+#		python$$pyvers setup.py install --install-layout=deb \
+#			--root $(CURDIR)/debian/python3-proliantutils; \
+#	done
 	rm -rf $(CURDIR)/debian/python*-proliantutils/usr/lib/python*/dist-packages/*.pth
 
 override_dh_auto_test:

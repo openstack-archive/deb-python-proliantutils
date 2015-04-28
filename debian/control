@@ -50,22 +50,22 @@ Description: client lib interfacing various devices in HP Proliant Servers - Pyt
  .
  This package contains the Python 2.x module.
 
-Package: python3-proliantutils
-Architecture: all
-Pre-Depends: dpkg (>= 1.15.6~)
-Depends: python3-jsonschema (>= 2.4.0),
-         python3-oslo.concurrency (>= 1.4.1),
-         python3-oslo.utils (>= 1.2.0),
-         python3-six (>= 1.9.0),
-         ${misc:Depends},
-         ${python3:Depends},
-Suggests: python-proliantutils-doc
-Description: client lib interfacing various devices in HP Proliant Servers - Python 3.x
- Proliant Management Tools provides Python libraries for interfacing and
- managing various devices(like iLO) present in HP Proliant Servers. Currently,
- this module offers a library to interface to iLO4 using RIBCL.
- .
- This package contains the Python 3.x module.
+#Package: python3-proliantutils
+#Architecture: all
+#Pre-Depends: dpkg (>= 1.15.6~)
+#Depends: python3-jsonschema (>= 2.4.0),
+#         python3-oslo.concurrency (>= 1.4.1),
+#         python3-oslo.utils (>= 1.2.0),
+#         python3-six (>= 1.9.0),
+#         ${misc:Depends},
+#         ${python3:Depends},
+#Suggests: python-proliantutils-doc
+#Description: client lib interfacing various devices in HP Proliant Servers - Python 3.x
+# Proliant Management Tools provides Python libraries for interfacing and
+# managing various devices(like iLO) present in HP Proliant Servers. Currently,
+# this module offers a library to interface to iLO4 using RIBCL.
+# .
+# This package contains the Python 3.x module.
 
 Package: python-proliantutils-doc
 Section: doc

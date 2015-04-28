@@ -3,6 +3,7 @@ python-proliantutils (2.1.0-1) unstable; urgency=medium
   * New upstream release.
   * Reviewed (build-)depends.
   * Using testr and subunit to run tests.
+  * Removed python3 support since it's gone from upstream.
 
  -- Thomas Goirand <zigo@debian.org>  Tue, 28 Apr 2015 21:39:16 +0000
 
