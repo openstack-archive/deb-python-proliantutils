@@ -19,11 +19,43 @@ import json
 import unittest
 
 import mock
-import ribcl_sample_outputs as constants
+import requests
+from requests.packages import urllib3
+from requests.packages.urllib3 import exceptions as urllib3_exceptions
 
 from proliantutils import exception
 from proliantutils.ilo import common
 from proliantutils.ilo import ribcl
+from proliantutils.tests.ilo import ribcl_sample_outputs as constants
+
+
+class IloRibclTestCaseInitTestCase(unittest.TestCase):
+
+    @mock.patch.object(urllib3, 'disable_warnings')
+    def test_init(self, disable_warning_mock):
+        ribcl_client = ribcl.RIBCLOperations(
+            "x.x.x.x", "admin", "Admin", 60, 443, cacert='/somepath')
+
+        self.assertEqual(ribcl_client.host, "x.x.x.x")
+        self.assertEqual(ribcl_client.login, "admin")
+        self.assertEqual(ribcl_client.password, "Admin")
+        self.assertEqual(ribcl_client.timeout, 60)
+        self.assertEqual(ribcl_client.port, 443)
+        self.assertEqual(ribcl_client.cacert, '/somepath')
+
+    @mock.patch.object(urllib3, 'disable_warnings')
+    def test_init_without_cacert(self, disable_warning_mock):
+        ribcl_client = ribcl.RIBCLOperations(
+            "x.x.x.x", "admin", "Admin", 60, 443)
+
+        self.assertEqual(ribcl_client.host, "x.x.x.x")
+        self.assertEqual(ribcl_client.login, "admin")
+        self.assertEqual(ribcl_client.password, "Admin")
+        self.assertEqual(ribcl_client.timeout, 60)
+        self.assertEqual(ribcl_client.port, 443)
+        self.assertIsNone(ribcl_client.cacert)
+        disable_warning_mock.assert_called_once_with(
+            urllib3_exceptions.InsecureRequestWarning)
 
 
 class IloRibclTestCase(unittest.TestCase):
@@ -32,9 +64,58 @@ class IloRibclTestCase(unittest.TestCase):
         super(IloRibclTestCase, self).setUp()
         self.ilo = ribcl.RIBCLOperations("x.x.x.x", "admin", "Admin", 60, 443)
 
-    def test__request_ilo_connection_failed(self):
+    @mock.patch.object(ribcl.RIBCLOperations, '_serialize_xml')
+    @mock.patch.object(requests, 'post')
+    def test__request_ilo_without_verify(self, post_mock, serialize_mock):
+        response_mock = mock.MagicMock(text='returned-text')
+        serialize_mock.return_value = 'serialized-xml'
+        post_mock.return_value = response_mock
+
+        retval = self.ilo._request_ilo('xml-obj')
+
+        post_mock.assert_called_once_with(
+            'https://x.x.x.x:443/ribcl',
+            headers={"Content-length": 14},
+            data='serialized-xml',
+            verify=False)
+        response_mock.raise_for_status.assert_called_once_with()
+        self.assertEqual('returned-text', retval)
+
+    @mock.patch.object(ribcl.RIBCLOperations, '_serialize_xml')
+    @mock.patch.object(requests, 'post')
+    def test__request_ilo_with_verify(self, post_mock, serialize_mock):
+        self.ilo = ribcl.RIBCLOperations(
+            "x.x.x.x", "admin", "Admin", 60, 443,
+            cacert='/somepath')
+        response_mock = mock.MagicMock(text='returned-text')
+        serialize_mock.return_value = 'serialized-xml'
+        post_mock.return_value = response_mock
+
+        retval = self.ilo._request_ilo('xml-obj')
+
+        post_mock.assert_called_once_with(
+            'https://x.x.x.x:443/ribcl',
+            headers={"Content-length": 14},
+            data='serialized-xml',
+            verify='/somepath')
+        response_mock.raise_for_status.assert_called_once_with()
+        self.assertEqual('returned-text', retval)
+
+    @mock.patch.object(ribcl.RIBCLOperations, '_serialize_xml')
+    @mock.patch.object(requests, 'post')
+    def test__request_ilo_raises(self, post_mock, serialize_mock):
+        serialize_mock.return_value = 'serialized-xml'
+        post_mock.side_effect = Exception
+
         self.assertRaises(exception.IloConnectionError,
-                          self.ilo.get_all_licenses)
+                          self.ilo._request_ilo,
+                          'xml-obj')
+
+        post_mock.assert_called_once_with(
+            'https://x.x.x.x:443/ribcl',
+            headers={"Content-length": 14},
+            data='serialized-xml',
+            verify=False)
 
     @mock.patch.object(ribcl.RIBCLOperations, '_request_ilo')
     def test_login_fail(self, request_ilo_mock):
@@ -147,10 +228,26 @@ class IloRibclTestCase(unittest.TestCase):
         self.assertIsNone(result)
         self.assertTrue(request_ilo_mock.called)
 
+    @mock.patch.object(ribcl.RIBCLOperations, 'get_vm_status')
     @mock.patch.object(ribcl.RIBCLOperations, '_request_ilo')
-    def test_eject_virtual_media(self, request_ilo_mock):
+    def test_eject_virtual_media_no_media(
+            self, request_ilo_mock, get_vm_status_mock):
+        """Ensure we don't try to eject media when no media is present."""
+        get_vm_status_mock.return_value = {'IMAGE_INSERTED': 'NO'}
+        self.ilo.eject_virtual_media(device='FLOPPY')
+        get_vm_status_mock.assert_called_once_with(device='FLOPPY')
+        self.assertFalse(request_ilo_mock.called)
+
+    @mock.patch.object(ribcl.RIBCLOperations, 'get_vm_status')
+    @mock.patch.object(ribcl.RIBCLOperations, '_request_ilo')
+    def test_eject_virtual_media(
+            self, request_ilo_mock, get_vm_status_mock):
+        """Ensure we try to eject media when media is present."""
+        get_vm_status_mock.return_value = {'IMAGE_INSERTED': 'YES'}
         request_ilo_mock.return_value = constants.EJECT_VIRTUAL_MEDIA_XML
-        self.assertRaises(exception.IloError, self.ilo.eject_virtual_media)
+        self.ilo.eject_virtual_media(device='CDROM')
+        get_vm_status_mock.assert_called_once_with(device='CDROM')
+        request_ilo_mock.assert_called_once_with(mock.ANY)
 
     @mock.patch.object(ribcl.RIBCLOperations, '_request_ilo')
     def test_set_vm_status(self, request_ilo_mock):
@@ -221,7 +318,7 @@ class IloRibclTestCase(unittest.TestCase):
         self.assertEqual(result, 'CDROM')
         self.assertTrue(request_ilo_mock.called)
 
-    @mock.patch.object(ribcl.RIBCLOperations, 'set_persistent_boot')
+    @mock.patch.object(ribcl.RIBCLOperations, '_set_persistent_boot')
     @mock.patch.object(ribcl.RIBCLOperations, '_request_ilo')
     def test_update_persistent_boot_uefi_cdrom(self,
                                                request_ilo_mock,
@@ -232,7 +329,7 @@ class IloRibclTestCase(unittest.TestCase):
         self.assertTrue(request_ilo_mock.called)
         set_persist_boot_mock.assert_called_once_with(['Boot000B'])
 
-    @mock.patch.object(ribcl.RIBCLOperations, 'set_persistent_boot')
+    @mock.patch.object(ribcl.RIBCLOperations, '_set_persistent_boot')
     @mock.patch.object(ribcl.RIBCLOperations, '_request_ilo')
     def test_update_persistent_boot_uefi_hdd(self,
                                              request_ilo_mock,
@@ -243,7 +340,7 @@ class IloRibclTestCase(unittest.TestCase):
         self.assertTrue(request_ilo_mock.called)
         set_persist_boot_mock.assert_called_once_with(['Boot0007'])
 
-    @mock.patch.object(ribcl.RIBCLOperations, 'set_persistent_boot')
+    @mock.patch.object(ribcl.RIBCLOperations, '_set_persistent_boot')
     @mock.patch.object(ribcl.RIBCLOperations, '_request_ilo')
     def test_update_persistent_boot_uefi_nic(self,
                                              request_ilo_mock,
@@ -270,7 +367,7 @@ class IloRibclTestCase(unittest.TestCase):
         self.assertRaises(exception.IloInvalidInputError,
                           self.ilo.update_persistent_boot, ['Other'])
 
-    @mock.patch.object(ribcl.RIBCLOperations, 'set_persistent_boot')
+    @mock.patch.object(ribcl.RIBCLOperations, '_set_persistent_boot')
     @mock.patch.object(ribcl.RIBCLOperations, '_request_ilo')
     def test_update_persistent_boot_bios(self,
                                          request_ilo_mock,
@@ -339,6 +436,43 @@ class IloRibclTestCase(unittest.TestCase):
             self.assertIn('MINIMUM_POWER_READING', result)
             self.assertIn('AVERAGE_POWER_READING', result)
 
+    @mock.patch.object(requests, 'get')
+    def test__request_host_with_verify(self, request_mock):
+        self.ilo = ribcl.RIBCLOperations(
+            "x.x.x.x", "admin", "Admin", 60, 443,
+            cacert='/somepath')
+        response_mock = mock.MagicMock(text='foo')
+        request_mock.return_value = response_mock
+
+        retval = self.ilo._request_host()
+
+        request_mock.assert_called_once_with(
+            "https://x.x.x.x/xmldata?item=all", verify='/somepath')
+        response_mock.raise_for_status.assert_called_once_with()
+        self.assertEqual('foo', retval)
+
+    @mock.patch.object(requests, 'get')
+    def test__request_host_without_verify(self, request_mock):
+        response_mock = mock.MagicMock(text='foo')
+        request_mock.return_value = response_mock
+
+        retval = self.ilo._request_host()
+
+        request_mock.assert_called_once_with(
+            "https://x.x.x.x/xmldata?item=all", verify=False)
+        response_mock.raise_for_status.assert_called_once_with()
+        self.assertEqual('foo', retval)
+
+    @mock.patch.object(requests, 'get')
+    def test__request_host_raises(self, request_mock):
+        request_mock.side_effect = Exception
+
+        self.assertRaises(exception.IloConnectionError,
+                          self.ilo._request_host)
+
+        request_mock.assert_called_once_with(
+            "https://x.x.x.x/xmldata?item=all", verify=False)
+
     @mock.patch.object(ribcl.RIBCLOperations, '_request_host')
     def test_get_host_uuid(self, request_host_mock):
         request_host_mock.return_value = constants.GET_HOST_UUID
@@ -380,6 +514,27 @@ class IloRibclTestCase(unittest.TestCase):
         local_gb = self.ilo._parse_storage_embedded_health(json_data)
         self.assertTrue(type(local_gb), int)
         self.assertEqual("99", str(local_gb))
+
+    def test__parse_storage_embedded_health_controller_list(self):
+        data = constants.GET_EMBEDDED_HEALTH_OUTPUT_LIST_STORAGE
+        json_data = json.loads(data)
+        local_gb = self.ilo._parse_storage_embedded_health(json_data)
+        self.assertTrue(type(local_gb), int)
+        self.assertEqual("99", str(local_gb))
+
+    def test__parse_storage_embedded_health_no_logical_drive(self):
+        data = constants.GET_EMBEDDED_HEALTH_OUTPUT_NO_LOGICAL_DRIVE
+        json_data = json.loads(data)
+        local_gb = self.ilo._parse_storage_embedded_health(json_data)
+        self.assertTrue(type(local_gb), int)
+        self.assertEqual("0", str(local_gb))
+
+    def test__parse_storage_embedded_health_no_controller(self):
+        data = constants.GET_EMBEDDED_HEALTH_OUTPUT_NO_CONTROLLER
+        json_data = json.loads(data)
+        local_gb = self.ilo._parse_storage_embedded_health(json_data)
+        self.assertTrue(type(local_gb), int)
+        self.assertEqual("0", str(local_gb))
 
     def test__get_firmware_embedded_health(self):
         data = constants.GET_EMBEDDED_HEALTH_OUTPUT
@@ -448,6 +603,27 @@ class IloRibclTestCase(unittest.TestCase):
         self.assertIn('pci_gpu_devices', capabilities)
         self.assertNotIn('secure_boot', capabilities)
 
+    @mock.patch.object(ribcl.RIBCLOperations, 'get_product_name')
+    @mock.patch.object(ribcl.RIBCLOperations, 'get_host_health_data')
+    @mock.patch.object(ribcl.RIBCLOperations, '_get_ilo_firmware_version')
+    @mock.patch.object(ribcl.RIBCLOperations, '_get_rom_firmware_version')
+    def test_get_server_capabilities_gen8_no_firmware(self, rom_mock, ilo_mock,
+                                                      health_data_mock,
+                                                      server_mock):
+        data = constants.GET_EMBEDDED_HEALTH_OUTPUT
+        json_data = json.loads(data)
+        health_data_mock.return_value = json_data
+        server_mock.return_value = 'ProLiant DL580 Gen8'
+        ilo_mock.return_value = None
+        rom_mock.return_value = None
+        capabilities = self.ilo.get_server_capabilities()
+        self.assertIsInstance(capabilities, dict)
+        self.assertNotIn('ilo_firmware_version', capabilities)
+        self.assertNotIn('rom_firmware_version', capabilities)
+        self.assertIn('server_model', capabilities)
+        self.assertIn('pci_gpu_devices', capabilities)
+        self.assertNotIn('secure_boot', capabilities)
+
     @mock.patch.object(ribcl.RIBCLOperations, 'get_supported_boot_mode')
     def test__get_server_boot_modes_bios(self, boot_mock):
         boot_mock.return_value = 'LEGACY_ONLY'
@@ -476,16 +652,30 @@ class IloRibclTestCase(unittest.TestCase):
         boot_mode = self.ilo._get_server_boot_modes()
         self.assertEqual(expected_boot_mode, boot_mode)
 
+    def test__get_nic_boot_devices(self):
+        data = json.loads(constants.GET_NIC_DATA)
+        expected = ["Boot0003", "Boot0001", "Boot0004"]
+        result = self.ilo._get_nic_boot_devices(data)
+        self.assertEqual(result, expected)
+
+    @mock.patch.object(ribcl.RIBCLOperations, '_request_ilo')
+    def test_activate_license_ok(self, request_mock):
+        request_mock.return_value = constants.ACTIVATE_LICENSE_XML
+        self.ilo.activate_license("testkey")
+        self.assertTrue(request_mock.called)
+
+    @mock.patch.object(ribcl.RIBCLOperations, '_request_ilo')
+    def test_activate_license_invalid(self, request_mock):
+        request_mock.return_value = constants.ACTIVATE_LICENSE_FAIL_XML
+        self.assertRaises(exception.IloError, self.ilo.activate_license, 'key')
+        self.assertTrue(request_mock.called)
+
 
 class IloRibclTestCaseBeforeRisSupport(unittest.TestCase):
 
     def setUp(self):
         super(IloRibclTestCaseBeforeRisSupport, self).setUp()
         self.ilo = ribcl.IloClient("x.x.x.x", "admin", "Admin", 60, 443)
-
-    def test__request_ilo_connection_failed(self):
-        self.assertRaises(ribcl.IloConnectionError,
-                          self.ilo.get_all_licenses)
 
     @mock.patch.object(ribcl.IloClient, '_request_ilo')
     def test_login_fail(self, request_ilo_mock):
@@ -585,10 +775,14 @@ class IloRibclTestCaseBeforeRisSupport(unittest.TestCase):
         self.assertIsNone(result)
         self.assertTrue(request_ilo_mock.called)
 
+    @mock.patch.object(ribcl.RIBCLOperations, 'get_vm_status')
     @mock.patch.object(ribcl.IloClient, '_request_ilo')
-    def test_eject_virtual_media(self, request_ilo_mock):
+    def test_eject_virtual_media(self, request_ilo_mock, get_vm_status_mock):
+        get_vm_status_mock.return_value = {'IMAGE_INSERTED': 'YES'}
         request_ilo_mock.return_value = constants.EJECT_VIRTUAL_MEDIA_XML
-        self.assertRaises(ribcl.IloError, self.ilo.eject_virtual_media)
+        self.assertIsNone(self.ilo.eject_virtual_media(device='CDROM'))
+        get_vm_status_mock.assert_called_once_with(device='CDROM')
+        request_ilo_mock.assert_called_once_with(mock.ANY)
 
     @mock.patch.object(ribcl.IloClient, '_request_ilo')
     def test_set_vm_status(self, request_ilo_mock):

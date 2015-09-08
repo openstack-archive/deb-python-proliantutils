@@ -402,28 +402,31 @@ INSERT_VIRTUAL_MEDIA_XML = '''
 </RIBCL>
 '''
 
+
 EJECT_VIRTUAL_MEDIA_XML = '''
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0"?>\r
 <RIBCL VERSION="2.23">
-   <RESPONSE STATUS="0x0000" MESSAGE="No error" />
+<RESPONSE
+    STATUS="0x0000"
+    MESSAGE=\'No error\'
+     />
 </RIBCL>
-
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0"?>\r
 <RIBCL VERSION="2.23">
-   <RESPONSE STATUS="0x0000" MESSAGE="No error" />
+<RESPONSE
+    STATUS="0x0000"
+    MESSAGE=\'No error\'
+     />
 </RIBCL>
-
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0"?>\r
 <RIBCL VERSION="2.23">
-   <RESPONSE STATUS="0x0000" MESSAGE="No error" />
-</RIBCL>
-
-<?xml version="1.0" encoding="UTF-8"?>
-<RIBCL VERSION="2.23">
-   <RESPONSE STATUS="0x0039"
-             MESSAGE="No image present in the Virtual Media drive" />
+<RESPONSE
+    STATUS="0x0000"
+    MESSAGE=\'No error\'
+     />
 </RIBCL>
 '''
+
 
 SET_HOST_POWER_XML = '''
 <?xml version="1.0" encoding="UTF-8"?>
@@ -833,6 +836,40 @@ GET_PERSISTENT_BOOT_DEVICE_CDROM_MISSING_UEFI_XML = """
      />
 </RIBCL>
 """
+
+GET_NIC_DATA = '''
+[
+    {
+        "DESCRIPTION": "Slot 1 : Smart Array P840 Controller - 279.37 GiB,\
+                        RAID 0 Logical Drive(Target:0, Lun:0)",
+        "value": "Boot000E"
+    },
+    {
+        "DESCRIPTION": "Slot1:SmartArrayP840Controller-279.37GiB, RAID0 \
+                        LogicalDrive(Target: 0, Lun: 1)",
+        "value": "Boot000F"
+    },
+    {
+        "DESCRIPTION": "EmbeddedLOM1 Port1: HPEthernet1Gb4-port331iAdapter-\
+                        NIC(iSCSIIPv4)",
+        "value": "Boot0004"
+    },
+    {
+        "DESCRIPTION": "EmbeddedLOM1Port2: HPEthernet1Gb4-port331iAdapter-\
+                        NIC(PXEIPv4)",
+        "value": "Boot0003"
+    },
+    {
+        "DESCRIPTION": "EmbeddedLOM1Port2: HPEthernet1Gb 4-port331iAdapter-\
+                        NIC IPv4",
+        "value": "Boot0001"
+    },
+    {
+        "DESCRIPTION": "GenericUSBBoot",
+        "value": "Boot0000"
+    }
+]
+'''
 
 GET_HOST_UUID = '''
 <RIMP>
@@ -6240,6 +6277,46 @@ GET_EMBEDDED_HEALTH_OUTPUT = '''
                     "STATUS": {
                         "VALUE": "OK"
                     }
+                },
+                {
+                    "CAUTION": {
+                        "VALUE": "N/A"
+                    },
+                    "CRITICAL": {
+                        "VALUE": "N/A"
+                    },
+                    "CURRENTREADING": {
+                        "VALUE": "N/A"
+                    },
+                    "LABEL": {
+                        "VALUE": "56-GPU 1"
+                    },
+                    "LOCATION": {
+                        "VALUE": "I/O Board"
+                    },
+                    "STATUS": {
+                        "VALUE": "Not Installed"
+                    }
+                },
+                {
+                    "CAUTION": {
+                        "VALUE": "N/A"
+                    },
+                    "CRITICAL": {
+                        "VALUE": "N/A"
+                    },
+                    "CURRENTREADING": {
+                        "VALUE": "N/A"
+                    },
+                    "LABEL": {
+                        "VALUE": "57-GPU 2"
+                    },
+                    "LOCATION": {
+                        "VALUE": "I/O Board"
+                    },
+                    "STATUS": {
+                        "VALUE": "Not Installed"
+                    }
                 }
             ]
         },
@@ -6250,6 +6327,369 @@ GET_EMBEDDED_HEALTH_OUTPUT = '''
         "STATUS": "0x0000"
     },
     "VERSION": "2.23"
+}
+'''
+
+GET_EMBEDDED_HEALTH_OUTPUT_LIST_STORAGE = '''
+{
+    "GET_EMBEDDED_HEALTH_DATA": {
+        "STORAGE": {
+            "CONTROLLER": [
+                {
+                    "CACHE_MODULE_MEMORY": {
+                        "VALUE": "2097152 KB"
+                    },
+                    "CACHE_MODULE_SERIAL_NUM": {
+                        "VALUE": "PBKUD0BRH6U3KO"
+                    },
+                    "CACHE_MODULE_STATUS": {
+                        "VALUE": "OK"
+                    },
+                    "CONTROLLER_STATUS": {
+                        "VALUE": "OK"
+                    },
+                    "DRIVE_ENCLOSURE": [
+                        {
+                            "DRIVE_BAY": {
+                                "VALUE": "04"
+                            },
+                            "LABEL": {
+                                "VALUE": "Port 1I Box 1"
+                            },
+                            "STATUS": {
+                                "VALUE": "OK"
+                            }
+                        },
+                        {
+                            "DRIVE_BAY": {
+                                "VALUE": "01"
+                            },
+                            "LABEL": {
+                                "VALUE": "Port 1I Box 0"
+                            },
+                            "STATUS": {
+                                "VALUE": "OK"
+                            }
+                        }
+                    ],
+                    "ENCRYPTION_CSP_STATUS": {
+                        "VALUE": "OK"
+                    },
+                    "ENCRYPTION_SELF_TEST_STATUS": {
+                        "VALUE": "OK"
+                    },
+                    "ENCRYPTION_STATUS": {
+                        "VALUE": "Not Enabled"
+                    },
+                    "FW_VERSION": {
+                        "VALUE": "1.62"
+                    },
+                    "LABEL": {
+                        "VALUE": "Controller on System Board"
+                    },
+                    "LOGICAL_DRIVE": [
+                        {
+                            "CAPACITY": {
+                                "VALUE": "99 GB"
+                            },
+                            "ENCRYPTION_STATUS": {
+                                "VALUE": "Not Encrypted"
+                            },
+                            "FAULT_TOLERANCE": {
+                                "VALUE": "RAID 1/RAID 1+0"
+                            },
+                            "LABEL": {
+                                "VALUE": "01"
+                            },
+                            "PHYSICAL_DRIVE": [
+                                {
+                                    "CAPACITY": {
+                                        "VALUE": "279 GB"
+                                    },
+                                    "DRIVE_CONFIGURATION": {
+                                        "VALUE": "Configured"
+                                    },
+                                    "ENCRYPTION_STATUS": {
+                                        "VALUE": "Not Encrypted"
+                                    },
+                                    "FW_VERSION": {
+                                        "VALUE": "HPD0"
+                                    },
+                                    "LABEL": {
+                                        "VALUE": "Port 1I Box 1 Bay 1"
+                                    },
+                                    "LOCATION": {
+                                        "VALUE": "Port 1I Box 1 Bay 1"
+                                    },
+                                    "MODEL": {
+                                        "VALUE": "EG0300FCSPH"
+                                    },
+                                    "SERIAL_NUMBER": {
+                                        "VALUE": "64R0A18KFTM91426"
+                                    },
+                                    "STATUS": {
+                                        "VALUE": "OK"
+                                    }
+                                },
+                                {
+                                    "CAPACITY": {
+                                        "VALUE": "279 GB"
+                                    },
+                                    "ENCRYPTION_STATUS": {
+                                        "VALUE": "Not Encrypted"
+                                    },
+                                    "FW_VERSION": {
+                                        "VALUE": "HPD0"
+                                    },
+                                    "LABEL": {
+                                        "VALUE": "Port 1I Box 1 Bay 2"
+                                    },
+                                    "LOCATION": {
+                                        "VALUE": "Port 1I Box 1 Bay 2"
+                                    },
+                                    "MODEL": {
+                                        "VALUE": "EG0300FCSPH"
+                                    },
+                                    "SERIAL_NUMBER": {
+                                        "VALUE": "64R0A109FTM91426"
+                                    },
+                                    "STATUS": {
+                                        "VALUE": "OK"
+                                    }
+                                }
+                            ],
+                            "STATUS": {
+                                "VALUE": "OK"
+                            }
+                        },
+                        {
+                            "CAPACITY": {
+                                "VALUE": "99 GB"
+                            },
+                            "ENCRYPTION_STATUS": {
+                                "VALUE": "Not Encrypted"
+                            },
+                            "FAULT_TOLERANCE": {
+                                "VALUE": "RAID 1/RAID 1+0"
+                            },
+                            "LABEL": {
+                                "VALUE": "01"
+                            },
+                            "PHYSICAL_DRIVE": [
+                                {
+                                    "CAPACITY": {
+                                        "VALUE": "279 GB"
+                                    },
+                                    "DRIVE_CONFIGURATION": {
+                                        "VALUE": "Configured"
+                                    },
+                                    "ENCRYPTION_STATUS": {
+                                        "VALUE": "Not Encrypted"
+                                    },
+                                    "FW_VERSION": {
+                                        "VALUE": "HPD0"
+                                    },
+                                    "LABEL": {
+                                        "VALUE": "Port 1I Box 1 Bay 1"
+                                    },
+                                    "LOCATION": {
+                                        "VALUE": "Port 1I Box 1 Bay 1"
+                                    },
+                                    "MODEL": {
+                                        "VALUE": "EG0300FCSPH"
+                                    },
+                                    "SERIAL_NUMBER": {
+                                        "VALUE": "64R0A18KFTM91426"
+                                    },
+                                    "STATUS": {
+                                        "VALUE": "OK"
+                                    }
+                                },
+                                {
+                                    "CAPACITY": {
+                                        "VALUE": "279 GB"
+                                    },
+                                    "DRIVE_CONFIGURATION": {
+                                        "VALUE": "Configured"
+                                    },
+                                    "ENCRYPTION_STATUS": {
+                                        "VALUE": "Not Encrypted"
+                                    },
+                                    "FW_VERSION": {
+                                        "VALUE": "HPD0"
+                                    },
+                                    "LABEL": {
+                                        "VALUE": "Port 1I Box 1 Bay 2"
+                                    },
+                                    "LOCATION": {
+                                        "VALUE": "Port 1I Box 1 Bay 2"
+                                    },
+                                    "MODEL": {
+                                        "VALUE": "EG0300FCSPH"
+                                    },
+                                    "SERIAL_NUMBER": {
+                                        "VALUE": "64R0A109FTM91426"
+                                    },
+                                    "STATUS": {
+                                        "VALUE": "OK"
+                                    }
+                                }
+                            ],
+                            "STATUS": {
+                                "VALUE": "OK"
+                            }
+                        }
+                    ],
+                    "MODEL": {
+                        "VALUE": "HP Smart Array P830i Controller"
+                    },
+                    "SERIAL_NUMBER": {
+                        "VALUE": "001438031389320"
+                    },
+                    "STATUS": {
+                        "VALUE": "OK"
+                    }
+                },
+                {
+                    "CONTROLLER_STATUS": {
+                        "VALUE": "OK"
+                    },
+                    "FW_VERSION": {
+                        "VALUE": "5.42"
+                    },
+                    "LABEL": {
+                        "VALUE": "Controller in Slot 1"
+                    },
+                    "MODEL": {
+                        "VALUE": "HP Smart Array P421 Controller"
+                    },
+                    "SERIAL_NUMBER": {
+                        "VALUE": "PDSXL0BRH6G032"
+                    },
+                    "STATUS": {
+                        "VALUE": "OK"
+                    }
+                }
+            ],
+            "DISCOVERY_STATUS": {
+                "STATUS": {
+                    "VALUE": "Discovery Complete"
+                }
+            }
+        }
+    }
+}
+'''
+
+GET_EMBEDDED_HEALTH_OUTPUT_NO_CONTROLLER = '''
+{
+    "GET_EMBEDDED_HEALTH_DATA": {
+        "STORAGE": {
+            "DISCOVERY_STATUS": {
+                "STATUS": {
+                    "VALUE": "Discovery Complete"
+                }
+            }
+        }
+    }
+}
+'''
+
+GET_EMBEDDED_HEALTH_OUTPUT_NO_LOGICAL_DRIVE = '''
+{
+    "GET_EMBEDDED_HEALTH_DATA": {
+        "STORAGE": {
+            "CONTROLLER": [
+                {
+                    "CACHE_MODULE_MEMORY": {
+                        "VALUE": "2097152 KB"
+                    },
+                    "CACHE_MODULE_SERIAL_NUM": {
+                        "VALUE": "PBKUD0BRH6U3KO"
+                    },
+                    "CACHE_MODULE_STATUS": {
+                        "VALUE": "OK"
+                    },
+                    "CONTROLLER_STATUS": {
+                        "VALUE": "OK"
+                    },
+                    "DRIVE_ENCLOSURE": [
+                        {
+                            "DRIVE_BAY": {
+                                "VALUE": "04"
+                            },
+                            "LABEL": {
+                                "VALUE": "Port 1I Box 1"
+                            },
+                            "STATUS": {
+                                "VALUE": "OK"
+                            }
+                        },
+                        {
+                            "DRIVE_BAY": {
+                                "VALUE": "01"
+                            },
+                            "LABEL": {
+                                "VALUE": "Port 1I Box 0"
+                            },
+                            "STATUS": {
+                                "VALUE": "OK"
+                            }
+                        }
+                    ],
+                    "ENCRYPTION_CSP_STATUS": {
+                        "VALUE": "OK"
+                    },
+                    "ENCRYPTION_SELF_TEST_STATUS": {
+                        "VALUE": "OK"
+                    },
+                    "ENCRYPTION_STATUS": {
+                        "VALUE": "Not Enabled"
+                    },
+                    "FW_VERSION": {
+                        "VALUE": "1.62"
+                    },
+                    "LABEL": {
+                        "VALUE": "Controller on System Board"
+                    },
+                    "MODEL": {
+                        "VALUE": "HP Smart Array P830i Controller"
+                    },
+                    "SERIAL_NUMBER": {
+                        "VALUE": "001438031389320"
+                    },
+                    "STATUS": {
+                        "VALUE": "OK"
+                    }
+                },
+                {
+                    "CONTROLLER_STATUS": {
+                        "VALUE": "OK"
+                    },
+                    "FW_VERSION": {
+                        "VALUE": "5.42"
+                    },
+                    "LABEL": {
+                        "VALUE": "Controller in Slot 1"
+                    },
+                    "MODEL": {
+                        "VALUE": "HP Smart Array P421 Controller"
+                    },
+                    "SERIAL_NUMBER": {
+                        "VALUE": "PDSXL0BRH6G032"
+                    },
+                    "STATUS": {
+                        "VALUE": "OK"
+                    }
+                }
+            ],
+            "DISCOVERY_STATUS": {
+                "STATUS": {
+                    "VALUE": "Discovery Complete"
+                }
+            }
+        }
+    }
 }
 '''
 
@@ -6265,4 +6705,38 @@ FIRMWARE_EMBEDDED_HEALTH_OUTPUT = '''
     "System Programmable Logic Device": "Version 0x0B",
     "Power Management Controller Firmware": "4.1"
 }
+'''
+
+ACTIVATE_LICENSE_XML = '''
+<?xml version="1.0"?>
+<RIBCL VERSION="2.23">
+<RESPONSE
+    STATUS="0x0000"
+    MESSAGE='No error'
+    />
+</RIBCL>
+<?xml version="1.0"?>
+<RIBCL VERSION="2.23">
+<RESPONSE
+    STATUS="0x0000"
+    MESSAGE='No error'
+    />
+</RIBCL>
+'''
+
+ACTIVATE_LICENSE_FAIL_XML = '''
+<?xml version="1.0"?>
+<RIBCL VERSION="2.23">
+<RESPONSE
+    STATUS="0x0000"
+    MESSAGE='No error'
+    />
+</RIBCL>
+<?xml version="1.0"?>
+<RIBCL VERSION="2.23">
+<RESPONSE
+    STATUS="0x002E"
+    MESSAGE='License key error'
+     />
+</RIBCL>
 '''

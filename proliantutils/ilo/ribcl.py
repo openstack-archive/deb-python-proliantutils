@@ -18,10 +18,12 @@ over RIBCL scripting language
 """
 
 import re
-import urllib2
 import xml.etree.ElementTree as etree
 
 from oslo_utils import strutils
+import requests
+from requests.packages import urllib3
+from requests.packages.urllib3 import exceptions as urllib3_exceptions
 import six
 
 from proliantutils import exception
@@ -48,12 +50,21 @@ class RIBCLOperations(operations.IloOperations):
     Implements the base class using RIBCL scripting language to talk
     to the iLO.
     """
-    def __init__(self, host, login, password, timeout=60, port=443):
+    def __init__(self, host, login, password, timeout=60, port=443,
+                 cacert=None):
         self.host = host
         self.login = login
         self.password = password
         self.timeout = timeout
         self.port = port
+        self.cacert = cacert
+
+        # By default, requests logs following message if verify=False
+        #   InsecureRequestWarning: Unverified HTTPS request is
+        #   being made. Adding certificate verification is strongly advised.
+        # Just disable the warning if user intentionally did this.
+        if self.cacert is None:
+            urllib3.disable_warnings(urllib3_exceptions.InsecureRequestWarning)
 
     def _request_ilo(self, root):
         """Send RIBCL XML data to iLO.
@@ -68,13 +79,19 @@ class RIBCLOperations(operations.IloOperations):
         else:
             urlstr = 'https://%s/ribcl' % (self.host)
         xml = self._serialize_xml(root)
+        headers = {"Content-length": len(xml)}
+        kwargs = {'headers': headers, 'data': xml}
+        if self.cacert is not None:
+            kwargs['verify'] = self.cacert
+        else:
+            kwargs['verify'] = False
+
         try:
-            req = urllib2.Request(url=urlstr, data=xml)
-            req.add_header("Content-length", len(xml))
-            data = urllib2.urlopen(req).read()
-        except (ValueError, urllib2.URLError, urllib2.HTTPError) as e:
+            response = requests.post(urlstr, **kwargs)
+            response.raise_for_status()
+        except Exception as e:
             raise exception.IloConnectionError(e)
-        return data
+        return response.text
 
     def _create_dynamic_xml(self, cmdname, tag_name, mode, subelements=None):
         """Create RIBCL XML to send to iLO.
@@ -119,9 +136,19 @@ class RIBCLOperations(operations.IloOperations):
         :param root: root of the dynamic xml.
         """
         if hasattr(etree, 'tostringlist'):
-            xml = '\r\n'.join(etree.tostringlist(root)) + '\r\n'
+            if six.PY3:
+                xml_content_list = [
+                    x.decode("utf-8") for x in etree.tostringlist(root)]
+            else:
+                xml_content_list = etree.tostringlist(root)
+
+            xml = '\r\n'.join(xml_content_list) + '\r\n'
         else:
-            xml = etree.tostring(root) + '\r\n'
+            if six.PY3:
+                xml_content = etree.tostring(root).decode("utf-8")
+            else:
+                xml_content = etree.tostring(root)
+            xml = xml_content + '\r\n'
         return xml
 
     def _parse_output(self, xml_response):
@@ -172,7 +199,7 @@ class RIBCLOperations(operations.IloOperations):
         Converts the actual response from the ILO for an API
         to the dictionary.
         """
-        node = dict()
+        node = {}
         text = getattr(element, 'text')
         if text is not None:
             text = text.strip()
@@ -326,10 +353,13 @@ class RIBCLOperations(operations.IloOperations):
 
     def eject_virtual_media(self, device='FLOPPY'):
         """Ejects the Virtual Media image if one is inserted."""
+        vm_status = self.get_vm_status(device=device)
+        if vm_status['IMAGE_INSERTED'] == 'NO':
+            return
+
         dic = {'DEVICE': device.upper()}
-        data = self._execute_command(
+        self._execute_command(
             'EJECT_VIRTUAL_MEDIA', 'RIB_INFO', 'write', dic)
-        return data
 
     def set_vm_status(self, device='FLOPPY',
                       boot_option='BOOT_ONCE', write_protect='YES'):
@@ -382,7 +412,7 @@ class RIBCLOperations(operations.IloOperations):
             'SET_PENDING_BOOT_MODE', 'SERVER_INFO', 'write', dic)
         return data
 
-    def get_persistent_boot(self):
+    def _get_persistent_boot(self):
         """Retrieves the current boot mode settings."""
         data = self._execute_command(
             'GET_PERSISTENT_BOOT', 'SERVER_INFO', 'read')
@@ -391,7 +421,7 @@ class RIBCLOperations(operations.IloOperations):
 
     def get_persistent_boot_device(self):
         """Get the current persistent boot device set for the host."""
-        result = self.get_persistent_boot()
+        result = self._get_persistent_boot()
         boot_mode = self._check_boot_mode(result)
 
         if boot_mode == 'bios':
@@ -401,16 +431,16 @@ class RIBCLOperations(operations.IloOperations):
         if 'HP iLO Virtual USB CD' in value:
             return 'CDROM'
 
-        elif 'NIC' in value:
+        elif 'NIC' in value or 'PXE' in value:
             return 'NETWORK'
 
-        elif self._isDisk(value):
+        elif common.isDisk(value):
             return 'HDD'
 
         else:
             return None
 
-    def set_persistent_boot(self, values=[]):
+    def _set_persistent_boot(self, values=[]):
         """Configures a boot from a specific device."""
 
         xml = self._create_dynamic_xml(
@@ -441,10 +471,10 @@ class RIBCLOperations(operations.IloOperations):
                 raise exception.IloInvalidInputError(
                     "Invalid input. Valid devices: NETWORK, HDD or CDROM.")
 
-        result = self.get_persistent_boot()
+        result = self._get_persistent_boot()
         boot_mode = self._check_boot_mode(result)
         if boot_mode == 'bios':
-            self.set_persistent_boot(device_type)
+            self._set_persistent_boot(device_type)
             return
 
         device_list = []
@@ -467,7 +497,7 @@ class RIBCLOperations(operations.IloOperations):
                    % {'device': device_type[0], 'platform': platform})
             raise (exception.IloInvalidInputError(msg))
 
-        self.set_persistent_boot(device_list)
+        self._set_persistent_boot(device_list)
 
     def _check_boot_mode(self, result):
 
@@ -479,32 +509,30 @@ class RIBCLOperations(operations.IloOperations):
     def _get_nic_boot_devices(self, result):
         nw_identifier = "NIC"
         pxe_enabled = "PXE"
+        iscsi_identifier = "iSCSI"
         nic_list = []
         pxe_nic_list = []
+        iscsi_nic_list = []
         try:
             for item in result:
-                if nw_identifier in item["DESCRIPTION"]:
-                    # Check if it is PXE enabled, to add it to starting of list
-                    if pxe_enabled in item["DESCRIPTION"]:
-                        pxe_nic_list.append(item["value"])
-                    else:
-                        nic_list.append(item["value"])
+                if pxe_enabled in item["DESCRIPTION"]:
+                    pxe_nic_list.append(item["value"])
+                elif iscsi_identifier in item["DESCRIPTION"]:
+                    iscsi_nic_list.append(item["value"])
+                elif nw_identifier in item["DESCRIPTION"]:
+                    nic_list.append(item["value"])
         except KeyError as e:
             msg = "_get_nic_boot_devices failed with the KeyError:%s"
             raise exception.IloError((msg) % e)
 
-        all_nics = pxe_nic_list + nic_list
+        all_nics = pxe_nic_list + nic_list + iscsi_nic_list
         return all_nics
-
-    def _isDisk(self, result):
-        disk_identifier = ["Logical Drive", "HDD", "Storage", "LogVol"]
-        return any(e in result for e in disk_identifier)
 
     def _get_disk_boot_devices(self, result):
         disk_list = []
         try:
             for item in result:
-                if self._isDisk(item["DESCRIPTION"]):
+                if common.isDisk(item["DESCRIPTION"]):
                     disk_list.append(item["value"])
         except KeyError as e:
             msg = "_get_disk_boot_devices failed with the KeyError:%s"
@@ -514,14 +542,19 @@ class RIBCLOperations(operations.IloOperations):
 
     def _request_host(self):
         """Request host info from the server."""
-        urlstr = 'http://%s/xmldata?item=all' % (self.host)
+        urlstr = 'https://%s/xmldata?item=all' % (self.host)
+        kwargs = {}
+        if self.cacert is not None:
+            kwargs['verify'] = self.cacert
+        else:
+            kwargs['verify'] = False
         try:
-            req = urllib2.Request(url=urlstr)
-            xml = urllib2.urlopen(req).read()
-        except (ValueError, urllib2.URLError, urllib2.HTTPError) as e:
+            response = requests.get(urlstr, **kwargs)
+            response.raise_for_status()
+        except Exception as e:
             raise IloConnectionError(e)
 
-        return xml
+        return response.text
 
     def get_host_uuid(self):
         """Request host UUID of the server.
@@ -715,8 +748,12 @@ class RIBCLOperations(operations.IloOperations):
         # BootMode = self._get_server_boot_modes()
         capabilities = {}
         data = self.get_host_health_data()
-        capabilities.update(self._get_ilo_firmware_version(data))
-        capabilities.update(self._get_rom_firmware_version(data))
+        ilo_firmware = self._get_ilo_firmware_version(data)
+        if ilo_firmware:
+            capabilities.update(ilo_firmware)
+        rom_firmware = self._get_rom_firmware_version(data)
+        if rom_firmware:
+            capabilities.update(rom_firmware)
         capabilities.update({'server_model': self.get_product_name()})
         capabilities.update(self._get_number_of_gpu_devices_connected(data))
         return capabilities
@@ -730,17 +767,12 @@ class RIBCLOperations(operations.IloOperations):
 
         """
         memory_mb = 0
-        try:
-            memory = (data['GET_EMBEDDED_HEALTH_DATA']['MEMORY']
-                      ['MEMORY_DETAILS_SUMMARY'])
-        except KeyError as e:
-            msg = "Unable to get memory data. Error: Data missing %s"
-            raise exception.IloError((msg) % e)
+        memory = self.get_value_as_list((data['GET_EMBEDDED_HEALTH_DATA']
+                                        ['MEMORY']), 'MEMORY_DETAILS_SUMMARY')
+        if memory is None:
+            msg = "Unable to get memory data. Error: Data missing"
+            raise exception.IloError(msg)
 
-        # here the value can be either a dictionary or a list.
-        # Convert it tolist so that its uniform across servers.
-        if not isinstance(memory, list):
-            memory = [memory]
         total_memory_size = 0
         for item in memory:
             for val in item.values():
@@ -749,7 +781,7 @@ class RIBCLOperations(operations.IloOperations):
                     memory_bytes = (
                         strutils.string_to_bytes(
                             memsize.replace(' ', ''), return_int=True))
-                    memory_mb = memory_bytes / (1024 * 1024)
+                    memory_mb = int(memory_bytes / (1024 * 1024))
                     total_memory_size = total_memory_size + memory_mb
         return total_memory_size
 
@@ -760,17 +792,11 @@ class RIBCLOperations(operations.IloOperations):
         :returns: processor details like cpu arch and number of cpus.
 
         """
-        try:
-            processor = (data['GET_EMBEDDED_HEALTH_DATA']
-                         ['PROCESSORS']['PROCESSOR'])
-        except KeyError as e:
-            msg = "Unable to get cpu data. Error: Data missing %s"
-            raise exception.IloError((msg) % e)
-
-        # here the value can be either a dictionary or a list.
-        # Convert it tolist so that its uniform across servers.
-        if not isinstance(processor,  list):
-            processor = [processor]
+        processor = self.get_value_as_list((data['GET_EMBEDDED_HEALTH_DATA']
+                                           ['PROCESSORS']), 'PROCESSOR')
+        if processor is None:
+            msg = "Unable to get cpu data. Error: Data missing"
+            raise exception.IloError(msg)
         cpus = len(processor)
         cpu_arch = 'x86_64'
         return cpus, cpu_arch
@@ -784,36 +810,57 @@ class RIBCLOperations(operations.IloOperations):
         :returns: disk size in GB.
 
         """
-        try:
-            s = data['GET_EMBEDDED_HEALTH_DATA']['STORAGE']
-            storage = s['CONTROLLER']['LOGICAL_DRIVE']
-        except KeyError:
+        local_gb = 0
+        storage = self.get_value_as_list(data['GET_EMBEDDED_HEALTH_DATA'],
+                                         'STORAGE')
+        if storage is None:
             # We dont raise exception because this dictionary
             # is available only when RAID is configured.
             # If we raise error here then we will always fail
             # inspection where this module is consumed. Hence
             # as a workaround just return 0.
-            local_gb = 0
             return local_gb
 
-        local_gb = 0
         minimum = local_gb
 
-        # here the value can be either a dictionary or a list.
-        # Convert it to a list so that its uniform across servers.
-        if not isinstance(storage, list):
-            storage = [storage]
-
         for item in storage:
-            for key, val in item.items():
-                if key == 'CAPACITY':
-                    capacity = val['VALUE']
-                    local_bytes = (strutils.string_to_bytes(
-                                   capacity.replace(' ', ''), return_int=True))
-                    local_gb = local_bytes / (1024 * 1024 * 1024)
-                    if minimum >= local_gb or minimum == 0:
-                        minimum = local_gb
+            cntlr = self.get_value_as_list(item, 'CONTROLLER')
+            if cntlr is None:
+                continue
+            for s in cntlr:
+                drive = self.get_value_as_list(s, 'LOGICAL_DRIVE')
+                if drive is None:
+                    continue
+                for item in drive:
+                    for key, val in item.items():
+                        if key == 'CAPACITY':
+                            capacity = val['VALUE']
+                            local_bytes = (strutils.string_to_bytes(
+                                           capacity.replace(' ', ''),
+                                           return_int=True))
+                            local_gb = int(local_bytes / (1024 * 1024 * 1024))
+                            if minimum >= local_gb or minimum == 0:
+                                minimum = local_gb
         return minimum
+
+    def get_value_as_list(self, dictionary, key):
+        """Helper function to check and convert a value to list.
+
+        Helper function to check and convert a value to json list.
+        This helps the ribcl data to be generalized across the servers.
+
+        :param dictionary: a dictionary to check in if key is present.
+        :param key: key to be checked if thats present in the given dictionary.
+
+        :returns the data converted to a list.
+        """
+        if key not in dictionary:
+            return None
+        value = dictionary[key]
+        if not isinstance(value, list):
+            return [value]
+        else:
+            return value
 
     def _parse_nics_embedded_health(self, data):
         """Gets the NIC details from get_embedded_health data
@@ -826,16 +873,11 @@ class RIBCLOperations(operations.IloOperations):
         :raises IloError, if unable to get NIC data.
 
         """
-        try:
-            nic_data = (data['GET_EMBEDDED_HEALTH_DATA']
-                        ['NIC_INFORMATION']['NIC'])
-        except KeyError as e:
-            msg = "Unable to get NIC details. Data missing %s"
-            raise exception.IloError((msg) % e)
-        # here the value can be either a dictionary or a list.
-        # Convert it tolist so that its uniform across servers.
-        if not isinstance(nic_data, list):
-            nic_data = [nic_data]
+        nic_data = self.get_value_as_list((data['GET_EMBEDDED_HEALTH_DATA']
+                                          ['NIC_INFORMATION']), 'NIC')
+        if nic_data is None:
+            msg = "Unable to get NIC details. Data missing"
+            raise exception.IloError(msg)
         nic_dict = {}
         for item in nic_data:
             try:
@@ -844,9 +886,9 @@ class RIBCLOperations(operations.IloOperations):
                 location = item['LOCATION']['VALUE']
                 if location == 'Embedded':
                     nic_dict[port] = mac
-            except KeyError as e:
-                msg = "Unable to get NIC details. Data missing %s"
-                raise exception.IloError((msg) % e)
+            except KeyError:
+                msg = "Unable to get NIC details. Data missing"
+                raise exception.IloError(msg)
         return nic_dict
 
     def _get_firmware_embedded_health(self, data):
@@ -856,13 +898,10 @@ class RIBCLOperations(operations.IloOperations):
         :returns: a dictionary of firmware name and firmware version.
 
         """
-        try:
-            firmware = data['GET_EMBEDDED_HEALTH_DATA']['FIRMWARE_INFORMATION']
-        except KeyError:
-            pass
-
-        if not isinstance(firmware, list):
-            firmware = [firmware]
+        firmware = self.get_value_as_list(data['GET_EMBEDDED_HEALTH_DATA'],
+                                          'FIRMWARE_INFORMATION')
+        if firmware is None:
+            return None
         return dict((y['FIRMWARE_NAME']['VALUE'],
                      y['FIRMWARE_VERSION']['VALUE'])
                     for x in firmware for y in x.values())
@@ -878,8 +917,13 @@ class RIBCLOperations(operations.IloOperations):
 
         """
         firmware_details = self._get_firmware_embedded_health(data)
-        rom_firmware_version = firmware_details['HP ProLiant System ROM']
-        return {'rom_firmware_version': rom_firmware_version}
+        if firmware_details:
+            try:
+                rom_firmware_version = (
+                    firmware_details['HP ProLiant System ROM'])
+                return {'rom_firmware_version': rom_firmware_version}
+            except KeyError:
+                return None
 
     def _get_ilo_firmware_version(self, data):
         """Gets the ilo firmware version for server capabilities
@@ -892,7 +936,11 @@ class RIBCLOperations(operations.IloOperations):
 
         """
         firmware_details = self._get_firmware_embedded_health(data)
-        return {'ilo_firmware_version': firmware_details['iLO']}
+        if firmware_details:
+            try:
+                return {'ilo_firmware_version': firmware_details['iLO']}
+            except KeyError:
+                return None
 
     def _get_number_of_gpu_devices_connected(self, data):
         """Gets the number of GPU devices connected to the server
@@ -904,21 +952,30 @@ class RIBCLOperations(operations.IloOperations):
         :returns: a dictionary of rom firmware version.
 
         """
-        try:
-            temp = data['GET_EMBEDDED_HEALTH_DATA']['TEMPERATURE']['TEMP']
-        except KeyError:
-            pass
-
-        if not isinstance(temp, list):
-            temp = [temp]
-
+        temp = self.get_value_as_list((data['GET_EMBEDDED_HEALTH_DATA']
+                                      ['TEMPERATURE']), 'TEMP')
         count = 0
+        if temp is None:
+            return {'pci_gpu_devices': count}
+
         for key in temp:
             for name, value in key.items():
                 if name == 'LABEL' and 'GPU' in value['VALUE']:
                     count = count + 1
 
         return {'pci_gpu_devices': count}
+
+    def activate_license(self, key):
+        """Activates iLO license.
+
+        :param key: iLO license key.
+        :raises: IloError, on an error from iLO.
+        """
+        root = self._create_dynamic_xml('LICENSE', 'RIB_INFO', 'write')
+        element = root.find('LOGIN/RIB_INFO/LICENSE')
+        etree.SubElement(element, 'ACTIVATE', KEY=key)
+        d = self._request_ilo(root)
+        self._parse_output(d)
 
 # The below block of code is there only for backward-compatibility
 # reasons (before commit 47608b6 for ris-support).

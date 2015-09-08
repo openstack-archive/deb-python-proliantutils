@@ -163,13 +163,18 @@ def create_configuration(raid_config):
 
 
 def delete_configuration():
-    """Delete a RAID configuration on this server."""
+    """Delete a RAID configuration on this server.
+
+    :returns: the current RAID configuration after deleting all
+        the logical disks.
+    """
     server = objects.Server()
     for controller in server.controllers:
         # Trigger delete only if there is some RAID array, otherwise
         # hpssacli will fail saying "no logical drives found."
         if controller.raid_arrays:
             controller.delete_all_logical_drives()
+    return get_configuration()
 
 
 def get_configuration():
@@ -193,7 +198,7 @@ def get_configuration():
     """
     server = objects.Server()
     logical_drives = server.get_logical_drives()
-    raid_config = dict()
+    raid_config = {}
     raid_config['logical_disks'] = []
 
     for logical_drive in logical_drives:

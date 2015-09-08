@@ -17,10 +17,13 @@ __author__ = 'HP'
 import base64
 import gzip
 import hashlib
-import httplib
 import json
-import StringIO
-import urlparse
+
+import requests
+from requests.packages import urllib3
+from requests.packages.urllib3 import exceptions as urllib3_exceptions
+import six
+from six.moves.urllib import parse as urlparse
 
 from proliantutils import exception
 from proliantutils.ilo import common
@@ -31,16 +34,32 @@ related API's .
 
 TODO : Add rest of the API's that exists in RIBCL. """
 
+DEVICE_COMMON_TO_RIS = {'NETWORK': 'Pxe',
+                        'CDROM': 'Cd',
+                        'HDD': 'Hdd',
+                        }
+DEVICE_RIS_TO_COMMON = dict(
+    (v, k) for (k, v) in DEVICE_COMMON_TO_RIS.items())
+
 
 class RISOperations(operations.IloOperations):
 
-    def __init__(self, host, login, password, bios_password=None):
+    def __init__(self, host, login, password, bios_password=None,
+                 cacert=None):
         self.host = host
         self.login = login
         self.password = password
         self.bios_password = bios_password
         # Message registry support
         self.message_registries = {}
+        self.cacert = cacert
+
+        # By default, requests logs following message if verify=False
+        #   InsecureRequestWarning: Unverified HTTPS request is
+        #   being made. Adding certificate verification is strongly advised.
+        # Just disable the warning if user intentionally did this.
+        if self.cacert is None:
+            urllib3.disable_warnings(urllib3_exceptions.InsecureRequestWarning)
 
     def _rest_op(self, operation, suburi, request_headers, request_body):
         """Generic REST Operation handler."""
@@ -50,26 +69,28 @@ class RISOperations(operations.IloOperations):
         start_url = url.geturl()
 
         if request_headers is None:
-            request_headers = dict()
+            request_headers = {}
 
         # Use self.login/self.password and Basic Auth
         if self.login is not None and self.password is not None:
-            hr = "BASIC " + base64.b64encode(self.login + ":" + self.password)
+            auth_data = self.login + ":" + self.password
+            hr = "BASIC " + base64.b64encode(
+                auth_data.encode('ascii')).decode("utf-8")
             request_headers['Authorization'] = hr
 
         redir_count = 5
         while redir_count:
-            conn = None
-            if url.scheme == 'https':
-                conn = httplib.HTTPSConnection(host=url.netloc, strict=True)
-            elif url.scheme == 'http':
-                conn = httplib.HTTPConnection(host=url.netloc, strict=True)
+            kwargs = {'headers': request_headers,
+                      'data': json.dumps(request_body)}
+            if self.cacert is not None:
+                kwargs['verify'] = self.cacert
+            else:
+                kwargs['verify'] = False
 
+            request_method = getattr(requests, operation.lower())
+            response = None
             try:
-                conn.request(operation, url.path, headers=request_headers,
-                             body=json.dumps(request_body))
-                resp = conn.getresponse()
-                body = resp.read()
+                response = request_method(url.geturl(), **kwargs)
             except Exception as e:
                 raise exception.IloConnectionError(e)
 
@@ -81,11 +102,9 @@ class RISOperations(operations.IloOperations):
 
             # NOTE:  this makes sure the headers names are all lower cases
             # because HTTP says they are case insensitive
-            headers = dict((x.lower(), y) for x, y in resp.getheaders())
-
             # Follow HTTP redirect
-            if resp.status == 301 and 'location' in headers:
-                url = urlparse.urlparse(headers['location'])
+            if response.status_code == 301 and 'location' in response.headers:
+                url = urlparse.urlparse(response.headers['location'])
                 redir_count -= 1
             else:
                 break
@@ -95,23 +114,26 @@ class RISOperations(operations.IloOperations):
                    "URL incorrect: %s" % start_url)
             raise exception.IloConnectionError(msg)
 
-        response = dict()
-        try:
-            if body:
-                response = json.loads(body.decode('utf-8'))
-        except ValueError:
-            # if it doesn't decode as json
-            # NOTE:  resources may return gzipped content
-            # try to decode as gzip (we should check the headers for
-            # Content-Encoding=gzip)
+        response_body = {}
+        if response.text:
             try:
-                gzipper = gzip.GzipFile(fileobj=StringIO.StringIO(body))
-                uncompressed_string = gzipper.read().decode('UTF-8')
-                response = json.loads(uncompressed_string)
-            except Exception as e:
-                raise exception.IloError(e)
+                response_body = json.loads(response.text)
+            except (TypeError, ValueError):
+                # if it doesn't decode as json
+                # NOTE:  resources may return gzipped content
+                # try to decode as gzip (we should check the headers for
+                # Content-Encoding=gzip)
+                # NOTE: json.loads on python3 raises TypeError when
+                # response.text is gzipped one.
+                try:
+                    gzipper = gzip.GzipFile(
+                        fileobj=six.BytesIO(response.text))
+                    uncompressed_string = gzipper.read().decode('UTF-8')
+                    response_body = json.loads(uncompressed_string)
+                except Exception as e:
+                    raise exception.IloError(e)
 
-        return resp.status, headers, response
+        return response.status_code, response.headers, response_body
 
     def _rest_get(self, suburi, request_headers=None):
         """REST GET operation.
@@ -126,7 +148,7 @@ class RISOperations(operations.IloOperations):
         HTTP response codes could be 500, 404, 202 etc.
         """
         if not isinstance(request_headers, dict):
-            request_headers = dict()
+            request_headers = {}
         request_headers['Content-Type'] = 'application/json'
         return self._rest_op('PATCH', suburi, request_headers, request_body)
 
@@ -136,7 +158,7 @@ class RISOperations(operations.IloOperations):
         HTTP response codes could be 500, 404, 202 etc.
         """
         if not isinstance(request_headers, dict):
-            request_headers = dict()
+            request_headers = {}
         request_headers['Content-Type'] = 'application/json'
         return self._rest_op('PUT', suburi, request_headers, request_body)
 
@@ -147,7 +169,7 @@ class RISOperations(operations.IloOperations):
         ExtendedError, or it could be empty.
         """
         if not isinstance(request_headers, dict):
-            request_headers = dict()
+            request_headers = {}
         request_headers['Content-Type'] = 'application/json'
         return self._rest_op('POST', suburi, request_headers, request_body)
 
@@ -355,7 +377,7 @@ class RISOperations(operations.IloOperations):
 
     def _get_bios_hash_password(self, bios_password):
         """Get the hashed BIOS password."""
-        request_headers = dict()
+        request_headers = {}
         if bios_password:
             bios_password_hash = hashlib.sha256((bios_password.encode()).
                                                 hexdigest().upper())
@@ -378,6 +400,157 @@ class RISOperations(operations.IloOperations):
             msg = self._get_extended_error(response)
             raise exception.IloError(msg)
 
+    def _get_iscsi_settings_resource(self, data):
+        """Get the iscsi settings resoure.
+
+        :param data: Existing iscsi settings of the server.
+        :returns: headers, iscsi_settings url and
+                 iscsi settings as a dictionary.
+        :raises: IloCommandNotSupportedError, if resource is not found.
+        :raises: IloError, on an error from iLO.
+        """
+        try:
+            iscsi_settings_uri = data['links']['Settings']['href']
+        except KeyError:
+            msg = ('iscsi settings resource not found.')
+            raise exception.IloCommandNotSupportedError(msg)
+
+        status, headers, iscsi_settings = self._rest_get(iscsi_settings_uri)
+
+        if status != 200:
+            msg = self._get_extended_error(iscsi_settings)
+            raise exception.IloError(msg)
+
+        return headers, iscsi_settings_uri, iscsi_settings
+
+    def _get_bios_boot_resource(self, data):
+        """Get the Boot resource like BootSources.
+
+        :param data: Existing Bios settings of the server.
+        :returns: boot settings.
+        :raises: IloCommandNotSupportedError, if resource is not found.
+        :raises: IloError, on an error from iLO.
+        """
+        try:
+            boot_uri = data['links']['Boot']['href']
+        except KeyError:
+            msg = ('Boot resource not found.')
+            raise exception.IloCommandNotSupportedError(msg)
+
+        status, headers, boot_settings = self._rest_get(boot_uri)
+
+        if status != 200:
+            msg = self._get_extended_error(boot_settings)
+            raise exception.IloError(msg)
+
+        return boot_settings
+
+    def _get_bios_mappings_resource(self, data):
+        """Get the Mappings resource.
+
+        :param data: Existing Bios settings of the server.
+        :returns: mappings settings.
+        :raises: IloCommandNotSupportedError, if resource is not found.
+        :raises: IloError, on an error from iLO.
+        """
+        try:
+            map_uri = data['links']['Mappings']['href']
+        except KeyError:
+            msg = ('Mappings resource not found.')
+            raise exception.IloCommandNotSupportedError(msg)
+
+        status, headers, map_settings = self._rest_get(map_uri)
+        if status != 200:
+            msg = self._get_extended_error(map_settings)
+            raise exception.IloError(msg)
+
+        return map_settings
+
+    def _check_iscsi_rest_patch_allowed(self):
+        """Checks if patch is supported on iscsi.
+
+        :returns: iscsi url.
+        :raises: IloError, on an error from iLO.
+        :raises: IloCommandNotSupportedError, if the command is not supported
+                 on the server.
+        """
+
+        headers, bios_uri, bios_settings = self._check_bios_resource()
+        # Check if the bios resource exists.
+
+        if('links' in bios_settings and 'iScsi' in bios_settings['links']):
+            iscsi_uri = bios_settings['links']['iScsi']['href']
+            status, headers, settings = self._rest_get(iscsi_uri)
+
+            if status != 200:
+                msg = self._get_extended_error(settings)
+                raise exception.IloError(msg)
+
+            if not self._operation_allowed(headers, 'PATCH'):
+                headers, iscsi_uri, settings = (
+                    self._get_iscsi_settings_resource(settings))
+                self._validate_if_patch_supported(headers, iscsi_uri)
+
+            return iscsi_uri
+
+        else:
+            msg = ('"links/iScsi" section in bios'
+                   ' does not exist')
+            raise exception.IloCommandNotSupportedError(msg)
+
+    def _change_iscsi_settings(self, mac, iscsi_info):
+        """Change iscsi settings.
+
+        :param mac: MAC address of the initiator.
+        :param iscsi_info: A dictionary that contains information of iscsi
+                           target like target_name, lun, ip_address, port etc.
+        :raises: IloInvalidInputError, if mac provided is invalid.
+        :raises: IloError, on an error from iLO.
+        """
+        headers, bios_uri, bios_settings = self._check_bios_resource()
+        # Get the Boot resource and Mappings resource.
+        map_settings = self._get_bios_mappings_resource(bios_settings)
+        boot_settings = self._get_bios_boot_resource(bios_settings)
+        correlatable_id = None
+        for boot_setting in boot_settings['BootSources']:
+            if(mac in boot_setting['UEFIDevicePath']):
+                correlatable_id = boot_setting['CorrelatableID']
+                break
+
+        if not correlatable_id:
+            msg = ('MAC provided is Invalid')
+            raise exception.IloInvalidInputError(msg)
+
+        nic = None
+        # Get the NIC for the particular mac provided.
+        for map_setting in map_settings['BiosPciSettingsMappings']:
+            sub_instances = map_setting['Subinstances']
+            if sub_instances:
+                for sub_instance in sub_instances:
+                    if(sub_instance['CorrelatableID'] ==
+                       correlatable_id):
+                        # The nic is in the format 'NicBoot1' or 'NicBoot2'
+                        nic = sub_instance['Associations'][0]
+                        break
+                if nic is not None:
+                    break
+
+        if not nic:
+            msg = ('MAC does not have any corresponding mapping')
+            raise exception.IloError(msg)
+
+        iscsi_uri = self._check_iscsi_rest_patch_allowed()
+        iscsi_info['iSCSIBootAttemptName'] = nic
+        iscsi_info['iSCSINicSource'] = nic
+        iscsi_info['iSCSIBootAttemptInstance'] = 1
+        iscsi_info['iSCSIBootEnable'] = 'Enabled'
+        patch_data = {'iSCSIBootSources': [iscsi_info]}
+        status, headers, response = self._rest_patch(iscsi_uri,
+                                                     None, patch_data)
+        if status >= 300:
+            msg = self._get_extended_error(response)
+            raise exception.IloError(msg)
+
     def _change_secure_boot_settings(self, property, value):
         """Change secure boot settings on the server."""
         system = self._get_host_details()
@@ -391,7 +564,7 @@ class RISOperations(operations.IloOperations):
         secure_boot_uri = system['Oem']['Hp']['links']['SecureBoot']['href']
 
         # Change the property required
-        new_secure_boot_settings = dict()
+        new_secure_boot_settings = {}
         new_secure_boot_settings[property] = value
 
         # perform the patch
@@ -408,7 +581,7 @@ class RISOperations(operations.IloOperations):
         val = val.rstrip() if val.endswith(" ") else val+" "
         self._change_bios_setting({'CustomPostMessage': val})
 
-    def _validate_uefi_boot_mode(self):
+    def _is_boot_mode_uefi(self):
         """Checks if the system is in uefi boot mode.
 
         :return: 'True' if the boot mode is uefi else 'False'
@@ -467,8 +640,13 @@ class RISOperations(operations.IloOperations):
         :raises: IloCommandNotSupportedError, if the command is not supported
                  on the server.
         """
-        self._change_secure_boot_settings('SecureBootEnable',
-                                          secure_boot_enable)
+        if self._is_boot_mode_uefi():
+            self._change_secure_boot_settings('SecureBootEnable',
+                                              secure_boot_enable)
+        else:
+            msg = ('System is not in UEFI boot mode. "SecureBoot" related '
+                   'resources cannot be changed.')
+            raise exception.IloCommandNotSupportedInBiosError(msg)
 
     def reset_secure_boot_keys(self):
         """Reset secure boot keys to manufacturing defaults.
@@ -477,7 +655,12 @@ class RISOperations(operations.IloOperations):
         :raises: IloCommandNotSupportedError, if the command is not supported
                  on the server.
         """
-        self._change_secure_boot_settings('ResetToDefaultKeys', True)
+        if self._is_boot_mode_uefi():
+            self._change_secure_boot_settings('ResetToDefaultKeys', True)
+        else:
+            msg = ('System is not in UEFI boot mode. "SecureBoot" related '
+                   'resources cannot be changed.')
+            raise exception.IloCommandNotSupportedInBiosError(msg)
 
     def clear_secure_boot_keys(self):
         """Reset all keys.
@@ -486,7 +669,12 @@ class RISOperations(operations.IloOperations):
         :raises: IloCommandNotSupportedError, if the command is not supported
                  on the server.
         """
-        self._change_secure_boot_settings('ResetAllKeys', True)
+        if self._is_boot_mode_uefi():
+            self._change_secure_boot_settings('ResetAllKeys', True)
+        else:
+            msg = ('System is not in UEFI boot mode. "SecureBoot" related '
+                   'resources cannot be changed.')
+            raise exception.IloCommandNotSupportedInBiosError(msg)
 
     def get_host_power_status(self):
         """Request the power state of the server.
@@ -506,7 +694,7 @@ class RISOperations(operations.IloOperations):
         :raises: IloCommandNotSupportedInBiosError, if the system is
                  in the bios boot mode.
         """
-        if(self._validate_uefi_boot_mode() is True):
+        if(self._is_boot_mode_uefi() is True):
             return self._get_bios_setting('UefiShellStartupUrl')
         else:
             msg = 'get_http_boot_url is not supported in the BIOS boot mode'
@@ -520,10 +708,45 @@ class RISOperations(operations.IloOperations):
         :raises: IloCommandNotSupportedInBiosError, if the system is
                  in the bios boot mode.
         """
-        if(self._validate_uefi_boot_mode() is True):
+        if(self._is_boot_mode_uefi() is True):
             self._change_bios_setting({'UefiShellStartupUrl': url})
         else:
             msg = 'set_http_boot_url is not supported in the BIOS boot mode'
+            raise exception.IloCommandNotSupportedInBiosError(msg)
+
+    def set_iscsi_boot_info(self, mac, target_name, lun, ip_address,
+                            port='3260', auth_method=None, username=None,
+                            password=None):
+        """Set iscsi details of the system in uefi boot mode.
+
+        The iSCSI initiator is identified by the MAC provided.
+        The initiator system is set with the target details like
+        IQN, LUN, IP, Port etc.
+        :param mac: MAC address of initiator.
+        :param target_name: Target Name for iscsi.
+        :param lun: logical unit number.
+        :param ip_address: IP address of the target.
+        :param port: port of the target.
+        :param auth_method : either None or CHAP.
+        :param username: CHAP Username for authentication.
+        :param password: CHAP secret.
+        :raises: IloError, on an error from iLO.
+        :raises: IloCommandNotSupportedInBiosError, if the system is
+                 in the bios boot mode.
+        """
+        if(self._is_boot_mode_uefi() is True):
+            iscsi_info = {}
+            iscsi_info['iSCSITargetName'] = target_name
+            iscsi_info['iSCSIBootLUN'] = lun
+            iscsi_info['iSCSITargetIpAddress'] = ip_address
+            iscsi_info['iSCSITargetTcpPort'] = int(port)
+            if (auth_method == 'CHAP'):
+                iscsi_info['iSCSIAuthenticationMethod'] = 'Chap'
+                iscsi_info['iSCSIChapUsername'] = username
+                iscsi_info['iSCSIChapSecret'] = password
+            self._change_iscsi_settings(mac.upper(), iscsi_info)
+        else:
+            msg = 'iscsi boot is not supported in the BIOS boot mode'
             raise exception.IloCommandNotSupportedInBiosError(msg)
 
     def get_current_boot_mode(self):
@@ -609,8 +832,8 @@ class RISOperations(operations.IloOperations):
         :raises: IloCommandNotSupportedError, if the command is not supported
                  on the server.
         """
-        reset_uri = '/rest/v1/Managers/1'
-        status, headers, manager = self._rest_get(reset_uri)
+        manager_uri = '/rest/v1/Managers/1'
+        status, headers, manager = self._rest_get(manager_uri)
 
         if status != 200:
             msg = self._get_extended_error(manager)
@@ -622,7 +845,7 @@ class RISOperations(operations.IloOperations):
             msg = "%s is not a valid Manager type " % mtype
             raise exception.IloError(msg)
 
-        return manager, reset_uri
+        return manager, manager_uri
 
     def reset_ilo(self):
         """Resets the iLO.
@@ -723,3 +946,384 @@ class RISOperations(operations.IloOperations):
             # secure_boot
             pass
         return capabilities
+
+    def activate_license(self, key):
+        """Activates iLO license.
+
+        :param key: iLO license key.
+        :raises: IloError, on an error from iLO.
+        :raises: IloCommandNotSupportedError, if the command is not supported
+                 on the server.
+        """
+        manager, uri = self._get_ilo_details()
+        try:
+            lic_uri = manager['Oem']['Hp']['links']['LicenseService']['href']
+        except KeyError:
+            msg = ('"LicenseService" section in Manager/Oem/Hp does not exist')
+            raise exception.IloCommandNotSupportedError(msg)
+
+        lic_key = {}
+        lic_key['LicenseKey'] = key
+
+        # Perform POST to activate license
+        status, headers, response = self._rest_post(lic_uri, None, lic_key)
+
+        if status >= 300:
+            msg = self._get_extended_error(response)
+            raise exception.IloError(msg)
+
+    def _get_vm_device_status(self,  device='FLOPPY'):
+        """Returns the given virtual media device status and device URI
+
+        :param  device: virtual media device to be queried
+        :returns json format virtual media device status and its URI
+        :raises: IloError, on an error from iLO.
+        :raises: IloCommandNotSupportedError, if the command is not supported
+                 on the server.
+        """
+        valid_devices = {'FLOPPY': 'floppy',
+                         'CDROM': 'cd'}
+
+        # Check if the input is valid
+        if device not in valid_devices:
+                raise exception.IloInvalidInputError(
+                    "Invalid device. Valid devices: FLOPPY or CDROM.")
+
+        manager, uri = self._get_ilo_details()
+        try:
+            vmedia_uri = manager['links']['VirtualMedia']['href']
+        except KeyError:
+            msg = ('"VirtualMedia" section in Manager/links does not exist')
+            raise exception.IloCommandNotSupportedError(msg)
+
+        for status, hds, vmed, memberuri in self._get_collection(vmedia_uri):
+            status, headers, response = self._rest_get(memberuri)
+            if status != 200:
+                msg = self._get_extended_error(response)
+                raise exception.IloError(msg)
+
+            if (valid_devices[device] in
+               [item.lower() for item in response['MediaTypes']]):
+                vm_device_uri = response['links']['self']['href']
+                return response, vm_device_uri
+
+        # Requested device not found
+        msg = ('Virtualmedia device "' + device + '" is not'
+               ' found on this system.')
+        raise exception.IloError(msg)
+
+    def get_vm_status(self, device='FLOPPY'):
+        """Returns the virtual media drive status.
+
+        :param  device: virtual media device to be queried
+        :returns device status in dictionary form
+        :raises: IloError, on an error from iLO.
+        :raises: IloCommandNotSupportedError, if the command is not supported
+                 on the server.
+        """
+        response, vm_device_uri = self._get_vm_device_status(device)
+
+        # Create RIBCL equivalent response
+        # RIBCL provides this data in VM status
+        # VM_APPLET = CONNECTED | DISCONNECTED
+        # DEVICE = FLOPPY | CDROM
+        # BOOT_OPTION = BOOT_ALWAYS | BOOT_ONCE | NO_BOOT
+        # WRITE_PROTECT = YES | NO
+        # IMAGE_INSERTED = YES | NO
+        response_data = {}
+
+        if response.get('WriteProtected', False):
+            response_data['WRITE_PROTECT'] = 'YES'
+        else:
+            response_data['WRITE_PROTECT'] = 'NO'
+
+        if response.get('BootOnNextServerReset', False):
+            response_data['BOOT_OPTION'] = 'BOOT_ONCE'
+        else:
+            response_data['BOOT_OPTION'] = 'BOOT_ALWAYS'
+
+        if response.get('Inserted', False):
+            response_data['IMAGE_INSERTED'] = 'YES'
+        else:
+            response_data['IMAGE_INSERTED'] = 'NO'
+
+        if response.get('ConnectedVia') == 'NotConnected':
+            response_data['VM_APPLET'] = 'DISCONNECTED'
+            # When media is not connected, it's NO_BOOT
+            response_data['BOOT_OPTION'] = 'NO_BOOT'
+        else:
+            response_data['VM_APPLET'] = 'CONNECTED'
+
+        response_data['IMAGE_URL'] = response['Image']
+        response_data['DEVICE'] = device
+
+        # FLOPPY cannot be a boot device
+        if ((response_data['BOOT_OPTION'] == 'BOOT_ONCE') and
+           (response_data['DEVICE'] == 'FLOPPY')):
+            response_data['BOOT_OPTION'] = 'NO_BOOT'
+
+        return response_data
+
+    def set_vm_status(self, device='FLOPPY',
+                      boot_option='BOOT_ONCE', write_protect='YES'):
+        """Sets the Virtual Media drive status
+
+        It sets the boot option for virtual media device.
+        Note: boot option can be set only for CD device.
+
+        :param device: virual media device
+        :param boot_option: boot option to set on the virtual media device
+        :param write_protect: set the write protect flag on the vmedia device
+                              Note: It's ignored. In RIS it is read-only.
+        :raises: IloError, on an error from iLO.
+        :raises: IloCommandNotSupportedError, if the command is not supported
+                 on the server.
+        """
+        # CONNECT is a RIBCL call. There is no such property to set in RIS.
+        if boot_option == 'CONNECT':
+            return
+
+        boot_option_map = {'BOOT_ONCE': True,
+                           'BOOT_ALWAYS': False,
+                           'NO_BOOT': False
+                           }
+
+        if boot_option not in boot_option_map:
+            msg = ('Virtualmedia boot option "' + boot_option + '" is '
+                   'invalid.')
+            raise exception.IloInvalidInputError(msg)
+
+        response, vm_device_uri = self._get_vm_device_status(device)
+
+        # Update required property
+        vm_settings = {}
+        vm_settings['Oem'] = (
+            {'Hp': {'BootOnNextServerReset': boot_option_map[boot_option]}})
+
+        # perform the patch operation
+        status, headers, response = self._rest_patch(
+            vm_device_uri, None, vm_settings)
+
+        if status >= 300:
+            msg = self._get_extended_error(response)
+            raise exception.IloError(msg)
+
+    def insert_virtual_media(self, url, device='FLOPPY'):
+        """Notifies iLO of the location of a virtual media diskette image.
+
+        :param url: URL to image
+        :param device: virual media device
+        :raises: IloError, on an error from iLO.
+        :raises: IloCommandNotSupportedError, if the command is not supported
+                 on the server.
+        """
+        response, vm_device_uri = self._get_vm_device_status(device)
+
+        # Eject media if there is one. RIBCL was tolerant enough to overwrite
+        # existing media, RIS is not. This check is to take care of that
+        # assumption.
+        if response.get('Inserted', False):
+            self.eject_virtual_media(device)
+
+        # Update required property
+        vm_settings = {}
+        vm_settings['Image'] = url
+
+        # Perform the patch operation
+        status, headers, response = self._rest_patch(
+            vm_device_uri, None, vm_settings)
+
+        if status >= 300:
+            msg = self._get_extended_error(response)
+            raise exception.IloError(msg)
+
+    def eject_virtual_media(self, device='FLOPPY'):
+        """Ejects the Virtual Media image if one is inserted.
+
+        :param device: virual media device
+        :raises: IloError, on an error from iLO.
+        :raises: IloCommandNotSupportedError, if the command is not supported
+                 on the server.
+        """
+        response, vm_device_uri = self._get_vm_device_status(device)
+
+        # Check if virtual media is connected.
+        if response.get('Inserted') is False:
+            return
+
+        # Update required property
+        vm_settings = {}
+        vm_settings['Image'] = None
+
+        # perform the patch operation
+        status, headers, response = self._rest_patch(
+            vm_device_uri, None, vm_settings)
+
+        if status >= 300:
+            msg = self._get_extended_error(response)
+            raise exception.IloError(msg)
+
+    def _get_persistent_boot_devices(self):
+        """Get details of persistent boot devices, its order
+
+        :returns: List of dictionary of boot sources and
+                  list of boot device order
+        :raises: IloError, on an error from iLO.
+        :raises: IloCommandNotSupportedError, if the command is not supported
+                 on the server.
+        """
+        # Check if the BIOS resource if exists.
+        headers_bios, bios_uri, bios_settings = self._check_bios_resource()
+
+        # Get the Boot resource.
+        boot_settings = self._get_bios_boot_resource(bios_settings)
+
+        # Get the BootSources resource
+        try:
+            boot_sources = boot_settings['BootSources']
+        except KeyError:
+            msg = ("BootSources resource not found.")
+            raise exception.IloError(msg)
+
+        try:
+            boot_order = boot_settings['PersistentBootConfigOrder']
+        except KeyError:
+            msg = ("PersistentBootConfigOrder resource not found.")
+            raise exception.IloCommandNotSupportedError(msg)
+
+        return boot_sources, boot_order
+
+    def get_persistent_boot_device(self):
+        """Get current persistent boot device set for the host
+
+        :returns: persistent boot device for the system
+        :raises: IloError, on an error from iLO.
+        :raises: IloCommandNotSupportedError, if the command is not supported
+                 on the server.
+        """
+        system = self._get_host_details()
+        try:
+            # Return boot device if it is persistent.
+            if system['Boot']['BootSourceOverrideEnabled'] == 'Continuous':
+                device = system['Boot']['BootSourceOverrideTarget']
+                if device in DEVICE_RIS_TO_COMMON:
+                    return DEVICE_RIS_TO_COMMON[device]
+                return device
+        except KeyError as e:
+            msg = "get_persistent_boot_device failed with the KeyError:%s"
+            raise exception.IloError((msg) % e)
+
+        # Check if we are in BIOS boot mode.
+        # There is no resource to fetch boot device order for BIOS boot mode
+        if not self._is_boot_mode_uefi():
+            return None
+
+        # Get persistent boot device order for UEFI
+        boot_sources, boot_devices = self._get_persistent_boot_devices()
+
+        boot_string = ""
+        try:
+            for source in boot_sources:
+                if (source["StructuredBootString"] == boot_devices[0]):
+                    boot_string = source["BootString"]
+                    break
+        except KeyError as e:
+            msg = "get_persistent_boot_device failed with the KeyError:%s"
+            raise exception.IloError((msg) % e)
+
+        if 'HP iLO Virtual USB CD' in boot_string:
+            return 'CDROM'
+
+        elif ('NIC' in boot_string or
+              'PXE' in boot_string or
+              "iSCSI" in boot_string):
+            return 'NETWORK'
+
+        elif common.isDisk(boot_string):
+            return 'HDD'
+
+        else:
+            return None
+
+    def _update_persistent_boot(self, device_type=[], persistent=False):
+        """Changes the persistent boot device order in BIOS boot mode for host
+
+        Note: It uses first boot device from the device_type and ignores rest.
+
+        :param device_type: ordered list of boot devices
+        :param persistent: Boolean flag to indicate if the device to be set as
+                           a persistent boot device
+        :raises: IloError, on an error from iLO.
+        :raises: IloCommandNotSupportedError, if the command is not supported
+                 on the server.
+        """
+        tenure = 'Once'
+        new_device = device_type[0]
+
+        # If it is a standard device, we need to convert in RIS convention
+        if device_type[0].upper() in DEVICE_COMMON_TO_RIS:
+            new_device = DEVICE_COMMON_TO_RIS[device_type[0].upper()]
+
+        if persistent:
+            tenure = 'Continuous'
+
+        new_boot_settings = {}
+        new_boot_settings['Boot'] = {'BootSourceOverrideEnabled': tenure,
+                                     'BootSourceOverrideTarget': new_device}
+        systems_uri = "/rest/v1/Systems/1"
+
+        status, headers, response = self._rest_patch(systems_uri, None,
+                                                     new_boot_settings)
+        if status >= 300:
+            msg = self._get_extended_error(response)
+            raise exception.IloError(msg)
+
+    def update_persistent_boot(self, device_type=[]):
+        """Changes the persistent boot device order for the host
+
+        :param device_type: ordered list of boot devices
+        :raises: IloError, on an error from iLO.
+        :raises: IloCommandNotSupportedError, if the command is not supported
+                 on the server.
+        """
+        # Check if the input is valid
+        for item in device_type:
+            if item.upper() not in DEVICE_COMMON_TO_RIS:
+                raise exception.IloInvalidInputError(
+                    "Invalid input. Valid devices: NETWORK, HDD or CDROM.")
+
+        self._update_persistent_boot(device_type, persistent=True)
+
+    def set_one_time_boot(self, device):
+        """Configures a single boot from a specific device.
+
+        :param device: Device to be set as a one time boot device
+        :raises: IloError, on an error from iLO.
+        :raises: IloCommandNotSupportedError, if the command is not supported
+                 on the server.
+        """
+        self._update_persistent_boot([device], persistent=False)
+
+    def get_one_time_boot(self):
+        """Retrieves the current setting for the one time boot.
+
+        :returns: Returns the first boot device that would be used in next
+                 boot. Returns 'Normal' is no device is set.
+        :raises: IloError, on an error from iLO.
+        :raises: IloCommandNotSupportedError, if the command is not supported
+                 on the server.
+        """
+        system = self._get_host_details()
+        try:
+            if system['Boot']['BootSourceOverrideEnabled'] == 'Once':
+                device = system['Boot']['BootSourceOverrideTarget']
+                if device in DEVICE_RIS_TO_COMMON:
+                    return DEVICE_RIS_TO_COMMON[device]
+                return device
+            else:
+                # value returned by RIBCL if one-time boot setting are absent
+                return 'Normal'
+
+        except KeyError as e:
+            msg = "get_one_time_boot failed with the KeyError:%s"
+            raise exception.IloError((msg) % e)

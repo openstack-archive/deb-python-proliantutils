@@ -19,30 +19,42 @@ from proliantutils.ilo import ribcl
 from proliantutils.ilo import ris
 
 SUPPORTED_RIS_METHODS = [
+    'activate_license',
     'clear_secure_boot_keys',
+    'eject_virtual_media',
     'get_current_boot_mode',
     'get_host_power_status',
     'get_http_boot_url',
+    'get_one_time_boot',
     'get_pending_boot_mode',
+    'get_persistent_boot_device',
     'get_product_name',
     'get_secure_boot_mode',
+    'get_vm_status',
+    'insert_virtual_media',
     'reset_bios_to_default',
     'reset_ilo_credential',
     'reset_secure_boot_keys',
     'set_http_boot_url',
+    'set_one_time_boot',
     'set_pending_boot_mode',
     'set_secure_boot_mode',
-    'get_server_capabilities'
+    'get_server_capabilities',
+    'set_iscsi_boot_info',
+    'set_vm_status',
+    'update_persistent_boot',
     ]
 
 
 class IloClient(operations.IloOperations):
 
     def __init__(self, host, login, password, timeout=60, port=443,
-                 bios_password=None):
+                 bios_password=None, cacert=None):
         self.ribcl = ribcl.RIBCLOperations(host, login, password, timeout,
-                                           port)
-        self.ris = ris.RISOperations(host, login, password, bios_password)
+                                           port, cacert=cacert)
+        self.ris = ris.RISOperations(host, login, password,
+                                     bios_password=bios_password,
+                                     cacert=cacert)
         self.info = {'address': host, 'username': login, 'password': password}
         self.model = self.ribcl.get_product_name()
 
@@ -84,7 +96,31 @@ class IloClient(operations.IloOperations):
         :raises: IloCommandNotSupportedError, if the command is not supported
                  on the server.
         """
-        return self._call_method('set_http_boot_url')
+        return self._call_method('set_http_boot_url', url)
+
+    def set_iscsi_boot_info(self, mac, target_name, lun, ip_address,
+                            port='3260', auth_method=None, username=None,
+                            password=None):
+        """Set iscsi details of the system in uefi boot mode.
+
+        The iSCSI initiator is identified by the MAC provided.
+        The initiator system is set with the target details like
+        IQN, LUN, IP, Port etc.
+        :param mac: MAC address of initiator.
+        :param target_name: Target Name for iscsi.
+        :param lun: logical unit number.
+        :param ip_address: IP address of the target.
+        :param port: port of the target.
+        :param auth_method : either None or CHAP.
+        :param username: CHAP Username for authentication.
+        :param password: CHAP secret.
+        :raises: IloError, on an error from iLO.
+        :raises: IloCommandNotSupportedInBiosError, if the system is
+                 in the bios boot mode.
+        """
+        return self._call_method('set_iscsi_boot_info', mac, target_name, lun,
+                                 ip_address, port, auth_method, username,
+                                 password)
 
     def get_one_time_boot(self):
         """Retrieves the current setting for the one time boot."""
@@ -152,17 +188,9 @@ class IloClient(operations.IloOperations):
         """Sets the boot mode of the system for next boot."""
         return self._call_method('set_pending_boot_mode', value)
 
-    def get_persistent_boot(self):
-        """Retrieves the boot order of the host."""
-        return self._call_method('get_persistent_boot')
-
     def get_persistent_boot_device(self):
         """Get the current persistent boot device set for the host."""
         return self._call_method('get_persistent_boot_device')
-
-    def set_persistent_boot(self, values=[]):
-        """Configures to boot from a specific device."""
-        return self._call_method('set_persistent_boot', values)
 
     def update_persistent_boot(self, device_type=[]):
         """Updates persistent boot based on the boot mode."""
@@ -324,3 +352,13 @@ class IloClient(operations.IloOperations):
             capabilities.update({'nic_capacity': nic_capacity})
         if capabilities:
             return capabilities
+
+    def activate_license(self, key):
+        """Activates iLO license.
+
+        :param key: iLO license key.
+        :raises: IloError, on an error from iLO.
+        :raises: IloCommandNotSupportedError, if the command is not supported
+                 on the server.
+        """
+        return self._call_method('activate_license', key)
