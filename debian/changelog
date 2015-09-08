@@ -1,6 +1,7 @@
 python-proliantutils (2.1.4-1) experimental; urgency=medium
 
   * New upstream release.
+  * Fixed (build-)depends for this release.
 
  -- Thomas Goirand <zigo@debian.org>  Tue, 08 Sep 2015 19:38:36 +0000
 

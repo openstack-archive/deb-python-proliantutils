@@ -6,7 +6,7 @@ Uploaders: Thomas Goirand <zigo@debian.org>
 Build-Depends: debhelper (>= 9),
                dh-python,
                openstack-pkg-tools,
-               python-all (>= 2.6.6-3~),
+               python-all,
                python-pbr,
                python-setuptools,
                python-sphinx,
@@ -16,13 +16,15 @@ Build-Depends: debhelper (>= 9),
 Build-Depends-Indep: python-hacking,
                      python-jsonschema (>= 2.4.0),
                      python-mock,
-                     python-oslo.concurrency (>= 1.4.1),
-                     python-oslo.utils (>= 1.2.0),
+                     python-oslo.concurrency (>= 1.8.0),
+                     python-oslo.utils (>= 1.4.0),
+                     python-requests (>= 2.7.0),
                      python-six (>= 1.9.0),
                      python-testtools,
                      python3-jsonschema (>= 2.4.0),
-                     python3-oslo.concurrency (>= 1.4.1),
-                     python3-oslo.utils (>= 1.2.0),
+                     python3-oslo.concurrency (>= 1.8.0),
+                     python3-oslo.utils (>= 1.4.0),
+                     python3-requests (>= 2.7.0),
                      python3-six (>= 1.9.0),
                      python3-subunit,
                      python3-testtools,
@@ -35,10 +37,9 @@ Homepage: https://github.com/stackforge/proliantutils
 
 Package: python-proliantutils
 Architecture: all
-Pre-Depends: dpkg (>= 1.15.6~)
 Depends: python-jsonschema (>= 2.4.0),
-         python-oslo.concurrency (>= 1.4.1),
-         python-oslo.utils (>= 1.2.0),
+         python-oslo.concurrency (>= 1.8.0),
+         python-oslo.utils (>= 1.4.0),
          python-six (>= 1.9.0),
          ${misc:Depends},
          ${python:Depends},
@@ -52,10 +53,9 @@ Description: client lib interfacing various devices in HP Proliant Servers - Pyt
 
 #Package: python3-proliantutils
 #Architecture: all
-#Pre-Depends: dpkg (>= 1.15.6~)
 #Depends: python3-jsonschema (>= 2.4.0),
-#         python3-oslo.concurrency (>= 1.4.1),
-#         python3-oslo.utils (>= 1.2.0),
+#         python3-oslo.concurrency (>= 1.8.0),
+#         python3-oslo.utils (>= 1.4.0),
 #         python3-six (>= 1.9.0),
 #         ${misc:Depends},
 #         ${python3:Depends},
@@ -70,7 +70,6 @@ Description: client lib interfacing various devices in HP Proliant Servers - Pyt
 Package: python-proliantutils-doc
 Section: doc
 Architecture: all
-Pre-Depends: dpkg (>= 1.15.6~)
 Depends: ${misc:Depends}, ${sphinxdoc:Depends}
 Description: client lib interfacing various devices in HP Proliant Servers - doc
  Proliant Management Tools provides Python libraries for interfacing and
