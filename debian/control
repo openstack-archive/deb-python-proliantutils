@@ -34,7 +34,7 @@ Build-Depends-Indep: python-ddt,
 Standards-Version: 3.9.6
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=openstack/python-proliantutils.git
 Vcs-Git: git://anonscm.debian.org/openstack/python-proliantutils.git
-Homepage: https://github.com/stackforge/proliantutils
+Homepage: https://github.com/openstack/proliantutils
 
 Package: python-proliantutils
 Architecture: all

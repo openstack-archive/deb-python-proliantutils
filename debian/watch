@@ -1,3 +1,2 @@
 version=3
-http://pypi.python.org/packages/source/p/proliantutils proliantutils-(.*).tar.gz
-
+https://github.com/openstack/proliantutils/tags .*/(\d[\d\.]+)\.tar\.gz
