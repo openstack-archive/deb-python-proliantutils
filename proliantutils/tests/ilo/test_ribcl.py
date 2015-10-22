@@ -29,6 +29,36 @@ from proliantutils.ilo import ribcl
 from proliantutils.tests.ilo import ribcl_sample_outputs as constants
 
 
+class MaskedRequestDataTestCase(unittest.TestCase):
+
+    def setUp(self):
+        super(MaskedRequestDataTestCase, self).setUp()
+        self.maskedRequestData = ribcl.MaskedRequestData({})
+
+    def test___str__with_user_credential_present(self):
+        xml_data = (
+            '<RIBCL VERSION="2.0">'
+            '<LOGIN PASSWORD="password" USER_LOGIN="admin">'
+            '<RIB_INFO MODE="read">')
+        masked_xml_data = (
+            '\'<RIBCL VERSION="2.0">'
+            '<LOGIN PASSWORD="*****" USER_LOGIN="*****">'
+            '<RIB_INFO MODE="read">\'')
+        self.maskedRequestData.request_data = {'headers': 'some-headers',
+                                               'data': xml_data,
+                                               'verify': False}
+        self.assertIn(masked_xml_data, str(self.maskedRequestData))
+
+    def test___str__with_user_credential_not_present(self):
+        xml_data = (
+            '<RIBCL VERSION="2.0">'
+            '<RIB_INFO MODE="read">')
+        self.maskedRequestData.request_data = {'headers': 'some-headers',
+                                               'data': xml_data,
+                                               'verify': True}
+        self.assertIn(xml_data, str(self.maskedRequestData))
+
+
 class IloRibclTestCaseInitTestCase(unittest.TestCase):
 
     @mock.patch.object(urllib3, 'disable_warnings')
@@ -484,9 +514,16 @@ class IloRibclTestCase(unittest.TestCase):
         data = constants.GET_EMBEDDED_HEALTH_OUTPUT
         json_data = json.loads(data)
         cpus, cpu_arch = self.ilo._parse_processor_embedded_health(json_data)
-        self.assertEqual('2', str(cpus))
+        self.assertEqual('32', str(cpus))
         self.assertEqual('x86_64', cpu_arch)
         self.assertTrue(type(cpus), int)
+
+    def test__parse_processor_embedded_health_missing(self):
+        data = constants.GET_EMBEDDED_HEALTH_PROCESSORS_DATA_MISSING
+        json_data = json.loads(data)
+        self.assertRaises(exception.IloError,
+                          self.ilo._parse_processor_embedded_health,
+                          json_data)
 
     def test__parse_memory_embedded_health(self):
         data = constants.GET_EMBEDDED_HEALTH_OUTPUT
@@ -513,14 +550,14 @@ class IloRibclTestCase(unittest.TestCase):
         json_data = json.loads(data)
         local_gb = self.ilo._parse_storage_embedded_health(json_data)
         self.assertTrue(type(local_gb), int)
-        self.assertEqual("99", str(local_gb))
+        self.assertEqual("98", str(local_gb))
 
     def test__parse_storage_embedded_health_controller_list(self):
         data = constants.GET_EMBEDDED_HEALTH_OUTPUT_LIST_STORAGE
         json_data = json.loads(data)
         local_gb = self.ilo._parse_storage_embedded_health(json_data)
         self.assertTrue(type(local_gb), int)
-        self.assertEqual("99", str(local_gb))
+        self.assertEqual("98", str(local_gb))
 
     def test__parse_storage_embedded_health_no_logical_drive(self):
         data = constants.GET_EMBEDDED_HEALTH_OUTPUT_NO_LOGICAL_DRIVE
@@ -579,8 +616,8 @@ class IloRibclTestCase(unittest.TestCase):
                                'properties': {
                                'memory_mb': 32768,
                                'cpu_arch': 'x86_64',
-                               'local_gb': 99,
-                               'cpus': 2}
+                               'local_gb': 98,
+                               'cpus': 32}
                                }
         properties = self.ilo.get_essential_properties()
         self.assertIsInstance(properties, dict)
