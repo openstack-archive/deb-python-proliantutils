@@ -204,6 +204,72 @@ Smart Array P822 in Slot 2
       Model: SRCv24x6G
 '''
 
+HPSSA_DRIVES_SSD = '''
+Smart Array P822 in Slot 2
+   Bus Interface: PCI
+   Slot: 2
+   Serial Number: PDVTF0BRH5T0MO
+   Cache Serial Number: PBKUD0BRH5T3I6
+   RAID 6 (ADG) Status: Enabled
+   Controller Status: OK
+   Hardware Revision: B
+   Firmware Version: 4.68
+   Wait for Cache Room: Disabled
+   Surface Analysis Inconsistency Notification: Disabled
+   Post Prompt Timeout: 15 secs
+   Cache Board Present: True
+   Cache Status: OK
+   Drive Write Cache: Disabled
+   Total Cache Size: 2.0 GB
+   Total Cache Memory Available: 1.8 GB
+   No-Battery Write Cache: Disabled
+   Cache Backup Power Source: Capacitors
+   Battery/Capacitor Count: 1
+   Battery/Capacitor Status: OK
+   SATA NCQ Supported: True
+   Spare Activation Mode: Activate on physical drive failure (default)
+   Controller Temperature (C): 88
+   Cache Module Temperature (C): 37
+   Capacitor Temperature  (C): 21
+   Number of Ports: 6 (2 Internal / 4 External )
+   Driver Name: hpsa
+   Driver Version: 3.4.4
+   Driver Supports HP SSD Smart Path: True
+
+
+
+   unassigned
+
+      physicaldrive 6I:1:7
+         Port: 6I
+         Box: 1
+         Bay: 7
+         Status: OK
+         Drive Type: Unassigned Drive
+         Interface Type: Solid State SAS
+         Size: 200 GB
+         Native Block Size: 512
+         Rotational Speed: 15000
+         Firmware Revision: HPD6
+         Serial Number: 6SL7G54Q0000N4180W34
+         Model: HP      EF0600FARNA
+         Current Temperature (C): 31
+         Maximum Temperature (C): 39
+         PHY Count: 2
+         PHY Transfer Rate: 6.0Gbps, Unknown
+         Drive Authentication Status: OK
+         Carrier Application Version: 11
+         Carrier Bootloader Version: 6
+
+
+   SEP (Vendor ID PMCSIERA, Model SRCv24x6G) 380
+      Device Number: 380
+      Firmware Version: RevB
+      WWID: 5001438028842E1F
+      Vendor ID: PMCSIERA
+      Model: SRCv24x6G
+'''
+
 HPSSA_ONE_DRIVE = '''
 Smart Array P822 in Slot 2
    Bus Interface: PCI
@@ -1790,4 +1856,309 @@ Smart Array P822 in Slot 2
       WWID: 5001438028842E1F
       Vendor ID: PMCSIERA
       Model: SRCv24x6G
+'''
+
+
+NO_DRIVES_HPSSA_7_DISKS = '''
+
+Smart Array P822 in Slot 3
+   Bus Interface: PCI
+   Slot: 3
+   Serial Number: PDVTF0BRH5T0KV
+
+   unassigned
+
+      physicaldrive 5I:1:1
+         Port: 5I
+         Box: 1
+         Bay: 1
+         Status: OK
+         Interface Type: SAS
+         Size: 199 GB
+         Firmware Revision: HPD6
+         Serial Number: 6SL7G4QV0000B41803GZ
+         Model: HP      EF0600FARNA
+
+      physicaldrive 5I:1:2
+         Port: 5I
+         Box: 1
+         Bay: 2
+         Status: OK
+         Interface Type: SAS
+         Size: 200 GB
+         Firmware Revision: HPD6
+         Serial Number: 6SL7HK0Y0000N419008G
+         Model: HP      EF0600FARNA
+
+      physicaldrive 5I:1:3
+         Port: 5I
+         Box: 1
+         Bay: 3
+         Status: OK
+         Interface Type: SAS
+         Size: 600 GB
+         Firmware Revision: HPD6
+         Serial Number: 6SL7H1L50000B4180V5Y
+         Model: HP      EF0600FARNA
+
+      physicaldrive 5I:1:4
+         Port: 5I
+         Box: 1
+         Bay: 4
+         Status: OK
+         Interface Type: SAS
+         Size: 599 GB
+         Firmware Revision: HPD6
+         Serial Number: 6SL7H1K30000B41800TT
+         Model: HP      EF0600FARNA
+
+      physicaldrive 6I:1:5
+         Port: 6I
+         Box: 1
+         Bay: 5
+         Status: OK
+         Interface Type: SAS
+         Size: 598 GB
+         Firmware Revision: HPDB
+         Serial Number: 2AVUR97N
+         Model: HP      EF0600FATFF
+
+      physicaldrive 6I:1:6
+         Port: 6I
+         Box: 1
+         Bay: 6
+         Status: OK
+         Interface Type: SAS
+         Size: 500 GB
+         Firmware Revision: HPDB
+         Serial Number: 2AVVJR1N
+         Model: HP      EF0600FATFF
+
+      physicaldrive 6I:1:7
+         Port: 6I
+         Box: 1
+         Bay: 7
+         Status: OK
+         Interface Type: SAS
+         Size: 500 GB
+         Firmware Revision: HPDB
+         Serial Number: 2AVVENJN
+         Model: HP      EF0600FATFF
+'''
+
+
+ONE_DRIVE_RAID_1_50_GB = '''
+
+Smart Array P822 in Slot 3
+   Slot: 3
+   Serial Number: PDVTF0BRH5T0KV
+
+   Array: A
+      Interface Type: SAS
+      Unused Space: 1042189  MB (91.1%)
+      Used Space: 100.0 GB (8.9%)
+
+      Logical Drive: 1
+         Size: 50.0 GB
+         Fault Tolerance: 1
+         Status: OK
+         MultiDomain Status: OK
+         Unique Identifier: 600508B1001C861A72C774A7394AE2AC
+         Disk Name: /dev/sda
+         Logical Drive Label: 013400ABPDVTF0BRH5T0KV22C5
+         LD Acceleration Method: Controller Cache
+
+      physicaldrive 5I:1:1
+         Port: 5I
+         Box: 1
+         Bay: 1
+         Status: OK
+         Interface Type: SAS
+         Size: 199 GB
+         Firmware Revision: HPD6
+         Serial Number: 6SL7G4QV0000B41803GZ
+         Model: HP      EF0600FARNA
+
+      physicaldrive 5I:1:2
+         Port: 5I
+         Box: 1
+         Bay: 2
+         Status: OK
+         Interface Type: SAS
+         Size: 200 GB
+         Firmware Revision: HPD6
+         Serial Number: 6SL7HK0Y0000N419008G
+         Model: HP      EF0600FARNA
+
+   unassigned
+
+      physicaldrive 5I:1:3
+         Port: 5I
+         Box: 1
+         Bay: 3
+         Status: OK
+         Interface Type: SAS
+         Size: 600 GB
+         Firmware Revision: HPD6
+         Serial Number: 6SL7H1L50000B4180V5Y
+         Model: HP      EF0600FARNA
+
+      physicaldrive 5I:1:4
+         Port: 5I
+         Box: 1
+         Bay: 4
+         Status: OK
+         Interface Type: SAS
+         Size: 599 GB
+         Firmware Revision: HPD6
+         Serial Number: 6SL7H1K30000B41800TT
+         Model: HP      EF0600FARNA
+
+      physicaldrive 6I:1:5
+         Port: 6I
+         Box: 1
+         Bay: 5
+         Status: OK
+         Interface Type: SAS
+         Size: 598 GB
+         Firmware Revision: HPDB
+         Serial Number: 2AVUR97N
+         Model: HP      EF0600FATFF
+
+      physicaldrive 6I:1:6
+         Port: 6I
+         Box: 1
+         Bay: 6
+         Status: OK
+         Interface Type: SAS
+         Size: 500 GB
+         Firmware Revision: HPDB
+         Serial Number: 2AVVJR1N
+         Model: HP      EF0600FATFF
+
+      physicaldrive 6I:1:7
+         Port: 6I
+         Box: 1
+         Bay: 7
+         Status: OK
+         Interface Type: SAS
+         Size: 500 GB
+         Firmware Revision: HPDB
+         Serial Number: 2AVVENJN
+         Model: HP      EF0600FATFF
+'''
+
+
+TWO_DRIVES_50GB_RAID1_MAXGB_RAID5 = '''
+
+Smart Array P822 in Slot 3
+   Slot: 3
+   Serial Number: PDVTF0BRH5T0KV
+
+   Array: A
+      Interface Type: SAS
+      Unused Space: 1042189  MB (91.1%)
+      Used Space: 100.0 GB (8.9%)
+      Status: OK
+
+      Logical Drive: 1
+         Size: 50.0 GB
+         Fault Tolerance: 1
+         Status: OK
+         Unique Identifier: 600508B1001C861A72C774A7394AE2AC
+         Disk Name: /dev/sda
+
+      physicaldrive 5I:1:1
+         Port: 5I
+         Box: 1
+         Bay: 1
+         Status: OK
+         Interface Type: SAS
+         Size: 199 GB
+         Firmware Revision: HPD6
+         Serial Number: 6SL7G4QV0000B41803GZ
+         Model: HP      EF0600FARNA
+
+      physicaldrive 5I:1:2
+         Port: 5I
+         Box: 1
+         Bay: 2
+         Status: OK
+         Interface Type: SAS
+         Size: 200 GB
+         Firmware Revision: HPD6
+         Serial Number: 6SL7HK0Y0000N419008G
+         Model: HP      EF0600FARNA
+
+
+   Array: B
+      Interface Type: SAS
+      Unused Space: 0  MB (0.0%)
+      Used Space: 1.6 TB (100.0%)
+      Status: OK
+      MultiDomain Status: OK
+      Array Type: Data
+      HP SSD Smart Path: disable
+
+      Logical Drive: 2
+         Size: 1.1 TB
+         Fault Tolerance: 5
+         Status: OK
+         Unique Identifier: 600508B1001CE9DE8551AEE29D5A72F7
+
+      physicaldrive 5I:1:3
+         Port: 5I
+         Box: 1
+         Bay: 3
+         Status: OK
+         Interface Type: SAS
+         Size: 600 GB
+         Firmware Revision: HPD6
+         Serial Number: 6SL7H1L50000B4180V5Y
+         Model: HP      EF0600FARNA
+
+      physicaldrive 5I:1:4
+         Port: 5I
+         Box: 1
+         Bay: 4
+         Status: OK
+         Interface Type: SAS
+         Size: 599 GB
+         Firmware Revision: HPD6
+         Serial Number: 6SL7H1K30000B41800TT
+         Model: HP      EF0600FARNA
+
+      physicaldrive 6I:1:5
+         Port: 6I
+         Box: 1
+         Bay: 5
+         Status: OK
+         Interface Type: SAS
+         Size: 598 GB
+         Firmware Revision: HPDB
+         Serial Number: 2AVUR97N
+         Model: HP      EF0600FATFF
+
+   unassigned
+
+      physicaldrive 6I:1:6
+         Port: 6I
+         Box: 1
+         Bay: 6
+         Status: OK
+         Interface Type: SAS
+         Size: 500 GB
+         Firmware Revision: HPDB
+         Serial Number: 2AVVJR1N
+
+      physicaldrive 6I:1:7
+         Port: 6I
+         Box: 1
+         Bay: 7
+         Status: OK
+         Interface Type: SAS
+         Size: 500 GB
+         Firmware Revision: HPDB
+         Serial Number: 2AVVENJN
+         Model: HP      EF0600FATFF
 '''

@@ -27,6 +27,7 @@ from six.moves.urllib import parse as urlparse
 
 from proliantutils import exception
 from proliantutils.ilo import common
+from proliantutils.ilo import firmware_controller
 from proliantutils.ilo import operations
 from proliantutils import log
 
@@ -41,6 +42,11 @@ DEVICE_COMMON_TO_RIS = {'NETWORK': 'Pxe',
                         }
 DEVICE_RIS_TO_COMMON = dict(
     (v, k) for (k, v) in DEVICE_COMMON_TO_RIS.items())
+
+POWER_STATE = {
+    'ON': 'On',
+    'OFF': 'ForceOff',
+}
 
 LOG = log.get_logger(__name__)
 
@@ -709,6 +715,88 @@ class RISOperations(operations.IloOperations):
         data = self._get_host_details()
         return data['Power'].upper()
 
+    def _perform_power_op(self, oper):
+        """Perform requested power operation.
+
+        :param oper: Type of power button press to simulate.
+                     Supported values: 'ON', 'ForceOff' and 'ForceRestart'
+        :raises: IloError, on an error from iLO.
+        """
+
+        power_settings = {"Action": "Reset",
+                          "ResetType": oper}
+        systems_uri = "/rest/v1/Systems/1"
+
+        status, headers, response = self._rest_post(systems_uri, None,
+                                                    power_settings)
+        if status >= 300:
+            msg = self._get_extended_error(response)
+            raise exception.IloError(msg)
+
+    def reset_server(self):
+        """Resets the server.
+
+        :raises: IloError, on an error from iLO.
+        """
+
+        self._perform_power_op("ForceRestart")
+
+    def _press_pwr_btn(self, pushType="Press"):
+        """Simulates a physical press of the server power button.
+
+        :param pushType: Type of power button press to simulate
+                         Supported values are: 'Press' and 'PressAndHold'
+        :raises: IloError, on an error from iLO.
+        """
+        power_settings = {"Action": "PowerButton",
+                          "Target": "/Oem/Hp",
+                          "PushType": pushType}
+
+        systems_uri = "/rest/v1/Systems/1"
+
+        status, headers, response = self._rest_post(systems_uri, None,
+                                                    power_settings)
+        if status >= 300:
+            msg = self._get_extended_error(response)
+            raise exception.IloError(msg)
+
+    def press_pwr_btn(self):
+        """Simulates a physical press of the server power button.
+
+        :raises: IloError, on an error from iLO.
+        """
+        self._press_pwr_btn()
+
+    def hold_pwr_btn(self):
+        """Simulate a physical press and hold of the server power button.
+
+        :raises: IloError, on an error from iLO.
+        """
+        self._press_pwr_btn(pushType="PressAndHold")
+
+    def set_host_power(self, power):
+        """Toggle the power button of server.
+
+        :param power: 'ON' or 'OFF'
+        :raises: IloError, on an error from iLO.
+        """
+        power = power.upper()
+        if (power is not None) and (power not in POWER_STATE):
+            msg = ("Invalid input '%(pow)s'. "
+                   "The expected input is ON or OFF." %
+                   {'pow': power})
+            raise exception.IloInvalidInputError(msg)
+
+        # Check current power status, do not act if it's in requested state.
+        cur_status = self.get_host_power_status()
+
+        if cur_status == power:
+            LOG.debug(self._("Node is already in '%(power)s' power state."),
+                      {'power': power})
+            return
+
+        self._perform_power_op(POWER_STATE[power])
+
     def get_http_boot_url(self):
         """Request the http boot url from system in uefi boot mode.
 
@@ -945,6 +1033,21 @@ class RISOperations(operations.IloOperations):
         manager, reset_uri = self._get_ilo_details()
         ilo_firmware_version = manager['Firmware']['Current']['VersionString']
         return {'ilo_firmware_version': ilo_firmware_version}
+
+    def get_ilo_firmware_version_as_major_minor(self):
+        """Gets the ilo firmware version for server capabilities
+
+        :returns: String with the format "<major>.<minor>" or None.
+
+        """
+        try:
+            manager, reset_uri = self._get_ilo_details()
+            ilo_fw_ver_str = (
+                manager['Oem']['Hp']['Firmware']['Current']['VersionString']
+            )
+            return common.get_major_minor(ilo_fw_ver_str)
+        except Exception:
+            return None
 
     def get_server_capabilities(self):
         """Gets server properties which can be used for scheduling
@@ -1350,3 +1453,96 @@ class RISOperations(operations.IloOperations):
         except KeyError as e:
             msg = "get_one_time_boot failed with the KeyError:%s"
             raise exception.IloError((msg) % e)
+
+    def _get_firmware_update_service_resource(self):
+        """Gets the firmware update service uri.
+
+        :returns: firmware update service uri
+        :raises: IloError, on an error from iLO.
+        :raises: IloConnectionError, if not able to reach iLO.
+        :raises: IloCommandNotSupportedError, for not finding the uri
+        """
+        manager, uri = self._get_ilo_details()
+        try:
+            fw_uri = manager['Oem']['Hp']['links']['UpdateService']['href']
+        except KeyError:
+            msg = ("Firmware Update Service resource not found.")
+            raise exception.IloCommandNotSupportedError(msg)
+        return fw_uri
+
+    @firmware_controller.check_firmware_update_component
+    def update_firmware(self, file_url, component_type):
+        """Updates the given firmware on the server for the given component.
+
+        :param file_url: location of the raw firmware file. Extraction of the
+                         firmware file (if in compact format) is expected to
+                         happen prior to this invocation.
+        :param component_type: Type of component to be applied to.
+        :raises: InvalidInputError, if the validation of the input fails
+        :raises: IloError, on an error from iLO
+        :raises: IloConnectionError, if not able to reach iLO.
+        :raises: IloCommandNotSupportedError, if the command is
+                 not supported on the server
+        """
+        fw_update_uri = self._get_firmware_update_service_resource()
+        action_data = {
+            'Action': 'InstallFromURI',
+            'FirmwareURI': file_url,
+        }
+
+        # perform the POST
+        LOG.debug(self._('Flashing firmware file: %s ...'), file_url)
+        status, headers, response = self._rest_post(
+            fw_update_uri, None, action_data)
+        if status != 200:
+            msg = self._get_extended_error(response)
+            raise exception.IloError(msg)
+
+        # wait till the firmware update completes.
+        common.wait_for_ris_firmware_update_to_complete(self)
+
+        try:
+            state, percent = self.get_firmware_update_progress()
+        except exception.IloError:
+            msg = 'Status of firmware update not known'
+            LOG.debug(self._(msg))  # noqa
+            return
+
+        if state == "ERROR":
+            msg = 'Error in firmware update'
+            LOG.error(self._(msg))  # noqa
+            raise exception.IloError(msg)
+        elif state == "UNKNOWN":
+            msg = 'Status of firmware update not known'
+            LOG.debug(self._(msg))  # noqa
+        else:  # "COMPLETED" | "IDLE"
+            LOG.info(self._('Flashing firmware file: %s ... done'), file_url)
+
+    def get_firmware_update_progress(self):
+        """Get the progress of the firmware update.
+
+        :returns: firmware update state, one of the following values:
+                  "IDLE", "UPLOADING", "PROGRESSING", "COMPLETED", "ERROR".
+                  If the update resource is not found, then "UNKNOWN".
+        :returns: firmware update progress percent
+        :raises: IloError, on an error from iLO.
+        :raises: IloConnectionError, if not able to reach iLO.
+        """
+        try:
+            fw_update_uri = self._get_firmware_update_service_resource()
+        except exception.IloError as e:
+            LOG.debug(self._('Progress of firmware update not known: %s'),
+                      str(e))
+            return "UNKNOWN", "UNKNOWN"
+
+        # perform the GET
+        status, headers, response = self._rest_get(fw_update_uri)
+        if status != 200:
+            msg = self._get_extended_error(response)
+            raise exception.IloError(msg)
+
+        fw_update_state = response.get('State')
+        fw_update_progress_percent = response.get('ProgressPercent')
+        LOG.debug(self._('Flashing firmware file ... in progress %d%%'),
+                  fw_update_progress_percent)
+        return fw_update_state, fw_update_progress_percent

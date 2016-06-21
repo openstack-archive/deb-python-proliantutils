@@ -49,13 +49,15 @@ class ManagerTestCases(testtools.TestCase):
                                                  "type=logicaldrive",
                                                  "drives=%s" % ld2_drives,
                                                  "raid=5",
-                                                 "size=%d" % (100*1024))
+                                                 "size=%d" % (100*1024),
+                                                 process_input='y')
         # Verify that we created the 50GB disk the last.
         controller_exec_cmd_mock.assert_called_with("create",
                                                     "type=logicaldrive",
                                                     "drives=%s" % ld1_drives,
                                                     "raid=1",
-                                                    "size=%d" % (50*1024))
+                                                    "size=%d" % (50*1024),
+                                                    process_input='y')
 
         ld1_ret = [x for x in current_config['logical_disks']
                    if x['raid_level'] == '1'][0]
@@ -128,13 +130,15 @@ class ManagerTestCases(testtools.TestCase):
                                                  "type=logicaldrive",
                                                  mock.ANY,
                                                  "raid=5",
-                                                 "size=%d" % (100*1024))
+                                                 "size=%d" % (100*1024),
+                                                 process_input='y')
         # Verify that we created the 50GB disk the last.
         controller_exec_cmd_mock.assert_called_with("create",
                                                     "type=logicaldrive",
                                                     mock.ANY,
                                                     "raid=1",
-                                                    "size=%d" % (50*1024))
+                                                    "size=%d" % (50*1024),
+                                                    process_input='y')
 
         ld1_ret = [x for x in current_config['logical_disks']
                    if x['raid_level'] == '1'][0]
@@ -193,13 +197,42 @@ class ManagerTestCases(testtools.TestCase):
                          sorted(ld2['physical_disks']))
         controller_exec_cmd_mock.assert_any_call(
             'create', 'type=logicaldrive', 'drives=5I:1:1,5I:1:2',
-            'raid=1', 'size=51200')
+            'raid=1', 'size=51200', process_input='y')
         controller_exec_cmd_mock.assert_any_call(
             'array', 'A', 'create', 'type=logicaldrive', 'raid=1', 'size=?',
             dont_transform_to_hpssa_exception=True)
         controller_exec_cmd_mock.assert_any_call(
             'array', 'A', 'create', 'type=logicaldrive', 'raid=1',
-            'size=51200')
+            'size=51200', process_input='y')
+
+    @mock.patch.object(objects.Controller, 'execute_cmd')
+    def test_create_configuration_max_as_size_gb(
+            self, controller_exec_cmd_mock, get_all_details_mock):
+        no_drives = raid_constants.NO_DRIVES_HPSSA_7_DISKS
+        one_drive = raid_constants.ONE_DRIVE_RAID_1_50_GB
+        two_drives = raid_constants.TWO_DRIVES_50GB_RAID1_MAXGB_RAID5
+        get_all_details_mock.side_effect = [no_drives, one_drive, two_drives]
+        raid_info = {'logical_disks': [{'size_gb': 50,
+                                        'raid_level': '1',
+                                        'disk_type': 'hdd'},
+                                       {'size_gb': 'MAX',
+                                        'raid_level': '5',
+                                        'disk_type': 'hdd'}]}
+        raid_info = manager.create_configuration(raid_info)
+        ld1 = raid_info['logical_disks'][0]
+        ld2 = raid_info['logical_disks'][1]
+        self.assertEqual('Smart Array P822 in Slot 3', ld1['controller'])
+        self.assertEqual('Smart Array P822 in Slot 3', ld2['controller'])
+        self.assertEqual(sorted(['5I:1:1', '5I:1:2']),
+                         sorted(ld1['physical_disks']))
+        self.assertEqual(sorted(['5I:1:3', '5I:1:4', '6I:1:5']),
+                         sorted(ld2['physical_disks']))
+        controller_exec_cmd_mock.assert_any_call(
+            'create', 'type=logicaldrive', 'drives=5I:1:1,5I:1:2',
+            'raid=1', 'size=51200', process_input='y')
+        controller_exec_cmd_mock.assert_any_call(
+            'create', 'type=logicaldrive', 'drives=5I:1:3,5I:1:4,6I:1:5',
+            'raid=5', process_input='y')
 
     @mock.patch.object(manager, 'get_configuration')
     @mock.patch.object(objects.Controller, 'execute_cmd')
@@ -238,7 +271,7 @@ class ManagerTestCases(testtools.TestCase):
 
         raid_info_returned = manager.get_configuration()
 
-        ld1_expected = {'size_gb': 558,
+        ld1_expected = {'size_gb': 557,
                         'raid_level': '1',
                         'controller': 'Smart Array P822 in Slot 2',
                         'physical_disks': ['5I:1:1',

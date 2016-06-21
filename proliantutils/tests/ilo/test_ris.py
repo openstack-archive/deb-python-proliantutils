@@ -403,6 +403,46 @@ class IloRisTestCase(testtools.TestCase):
         self.assertEqual(expected_caps, capabilities)
 
     @mock.patch.object(ris.RISOperations, '_get_ilo_details')
+    def test_get_ilo_firmware_version_as_major_minor(
+            self, get_ilo_details_mock):
+        ilo_details = json.loads(ris_outputs.GET_MANAGER_DETAILS)
+        uri = '/rest/v1/Managers/1'
+        get_ilo_details_mock.return_value = (ilo_details, uri)
+        ilo_firm = self.client.get_ilo_firmware_version_as_major_minor()
+        expected_ilo_firm = "2.04"
+        self.assertEqual(expected_ilo_firm, ilo_firm)
+
+    @mock.patch.object(ris.RISOperations, '_get_ilo_details')
+    def test_get_ilo_firmware_version_as_major_minor_suggested_min(
+            self, get_ilo_details_mock):
+        ilo_details = json.loads(ris_outputs.GET_MANAGER_DETAILS_EQ_SUGGESTED)
+        uri = '/rest/v1/Managers/1'
+        get_ilo_details_mock.return_value = (ilo_details, uri)
+        ilo_firm = self.client.get_ilo_firmware_version_as_major_minor()
+        expected_ilo_firm = "2.30"
+        self.assertEqual(expected_ilo_firm, ilo_firm)
+
+    @mock.patch.object(ris.RISOperations, '_get_ilo_details')
+    def test_get_ilo_firmware_version_as_major_minor_gt_suggested_min(
+            self, get_ilo_details_mock):
+        ilo_details = json.loads(ris_outputs.GET_MANAGER_DETAILS_GT_SUGGESTED)
+        uri = '/rest/v1/Managers/1'
+        get_ilo_details_mock.return_value = (ilo_details, uri)
+        ilo_firm = self.client.get_ilo_firmware_version_as_major_minor()
+        expected_ilo_firm = "2.54"
+        self.assertEqual(expected_ilo_firm, ilo_firm)
+
+    @mock.patch.object(ris.RISOperations, '_get_ilo_details')
+    def test_get_ilo_firmware_version_as_major_minor_no_firmware(
+            self, get_ilo_details_mock):
+        ilo_details = json.loads(ris_outputs.GET_MANAGER_DETAILS_NO_FIRMWARE)
+        uri = '/rest/v1/Managers/1'
+        get_ilo_details_mock.return_value = (ilo_details, uri)
+        ilo_firm = self.client.get_ilo_firmware_version_as_major_minor()
+        expected_ilo_firm = None
+        self.assertEqual(expected_ilo_firm, ilo_firm)
+
+    @mock.patch.object(ris.RISOperations, '_get_ilo_details')
     def test__get_ilo_firmware_version(self, get_ilo_details_mock):
         ilo_details = json.loads(ris_outputs.GET_MANAGER_DETAILS)
         uri = '/rest/v1/Managers/1'
@@ -805,6 +845,143 @@ class IloRisTestCase(testtools.TestCase):
         self.assertRaises(exception.IloError,
                           self.client.update_persistent_boot, ['fake'])
         self.assertFalse(update_persistent_boot_mock.called)
+
+    def test_update_firmware_throws_error_for_invalid_component(self):
+        # | WHEN | & | THEN |
+        self.assertRaises(exception.InvalidInputError,
+                          self.client.update_firmware,
+                          'fw_file_url',
+                          'invalid_component')
+
+    @mock.patch.object(ris.RISOperations,
+                       '_get_firmware_update_service_resource',
+                       autospec=True)
+    @mock.patch.object(ris.RISOperations, '_rest_post', autospec=True)
+    @mock.patch.object(ris.common, 'wait_for_ris_firmware_update_to_complete',
+                       autospec=True)
+    @mock.patch.object(ris.RISOperations, 'get_firmware_update_progress',
+                       autospec=True)
+    def test_update_firmware(
+            self, get_firmware_update_progress_mock,
+            wait_for_ris_firmware_update_to_complete_mock, _rest_post_mock,
+            _get_firmware_update_service_resource_mock):
+        # | GIVEN |
+        _rest_post_mock.return_value = 200, 'some-headers', 'response'
+        get_firmware_update_progress_mock.return_value = 'COMPLETED', 100
+        # | WHEN |
+        self.client.update_firmware('fw_file_url', 'ilo')
+        # | THEN |
+        _get_firmware_update_service_resource_mock.assert_called_once_with(
+            self.client)
+        _rest_post_mock.assert_called_once_with(
+            self.client, mock.ANY, None, {'Action': 'InstallFromURI',
+                                          'FirmwareURI': 'fw_file_url',
+                                          })
+        wait_for_ris_firmware_update_to_complete_mock.assert_called_once_with(
+            self.client)
+        get_firmware_update_progress_mock.assert_called_once_with(
+            self.client)
+
+    @mock.patch.object(
+        ris.RISOperations, '_get_firmware_update_service_resource',
+        autospec=True)
+    @mock.patch.object(ris.RISOperations, '_rest_post', autospec=True)
+    def test_update_firmware_throws_if_post_operation_fails(
+            self, _rest_post_mock, _get_firmware_update_service_resource_mock):
+        # | GIVEN |
+        _rest_post_mock.return_value = 500, 'some-headers', 'response'
+        # | WHEN | & | THEN |
+        self.assertRaises(exception.IloError,
+                          self.client.update_firmware,
+                          'fw_file_url',
+                          'cpld')
+
+    @mock.patch.object(ris.RISOperations,
+                       '_get_firmware_update_service_resource',
+                       autospec=True)
+    @mock.patch.object(ris.RISOperations, '_rest_post', autospec=True)
+    @mock.patch.object(ris.common, 'wait_for_ris_firmware_update_to_complete',
+                       autospec=True)
+    @mock.patch.object(ris.RISOperations, 'get_firmware_update_progress',
+                       autospec=True)
+    def test_update_firmware_throws_if_error_occurs_in_update(
+            self, get_firmware_update_progress_mock,
+            wait_for_ris_firmware_update_to_complete_mock, _rest_post_mock,
+            _get_firmware_update_service_resource_mock):
+        # | GIVEN |
+        _rest_post_mock.return_value = 200, 'some-headers', 'response'
+        get_firmware_update_progress_mock.return_value = 'ERROR', 0
+        # | WHEN | & | THEN |
+        self.assertRaises(exception.IloError,
+                          self.client.update_firmware,
+                          'fw_file_url',
+                          'ilo')
+
+    @mock.patch.object(ris.RISOperations,
+                       '_get_firmware_update_service_resource',
+                       autospec=True)
+    @mock.patch.object(ris.RISOperations, '_rest_get', autospec=True)
+    def test_get_firmware_update_progress(
+            self, _rest_get_mock,
+            _get_firmware_update_service_resource_mock):
+        # | GIVEN |
+        _rest_get_mock.return_value = (200, 'some-headers',
+                                       {'State': 'COMPLETED',
+                                        'ProgressPercent': 100})
+        # | WHEN |
+        state, percent = self.client.get_firmware_update_progress()
+        # | THEN |
+        _get_firmware_update_service_resource_mock.assert_called_once_with(
+            self.client)
+        _rest_get_mock.assert_called_once_with(self.client, mock.ANY)
+        self.assertTupleEqual((state, percent), ('COMPLETED', 100))
+
+    @mock.patch.object(ris.RISOperations,
+                       '_get_firmware_update_service_resource',
+                       autospec=True)
+    @mock.patch.object(ris.RISOperations, '_rest_get', autospec=True)
+    def test_get_firmware_update_progress_throws_if_get_operation_fails(
+            self, _rest_get_mock, _get_firmware_update_service_resource_mock):
+        # | GIVEN |
+        _rest_get_mock.return_value = 500, 'some-headers', 'response'
+        # | WHEN | & | THEN |
+        self.assertRaises(exception.IloError,
+                          self.client.get_firmware_update_progress)
+
+    @mock.patch.object(ris.RISOperations, 'get_host_power_status')
+    def test_set_host_power_no_change(self, host_power_status_mock):
+        host_power_status_mock.return_value = 'ON'
+        self.client.set_host_power('on')
+        self.assertTrue(host_power_status_mock.called)
+
+    @mock.patch.object(ris.RISOperations, 'get_host_power_status')
+    def test_set_host_power_exc(self, host_power_status_mock):
+        self.assertRaises(exception.IloInvalidInputError,
+                          self.client.set_host_power, 'invalid')
+
+    @mock.patch.object(ris.RISOperations, '_perform_power_op')
+    @mock.patch.object(ris.RISOperations, 'get_host_power_status')
+    def test_set_host_power_change(self, host_power_status_mock,
+                                   perform_power_op_mock):
+        host_power_status_mock.return_value = 'ON'
+        self.client.set_host_power('off')
+        host_power_status_mock.assert_called_once_with()
+        perform_power_op_mock.assert_called_once_with('ForceOff')
+
+    @mock.patch.object(ris.RISOperations, '_perform_power_op')
+    def test_reset_server(self, mock_perform_power):
+        self.client.reset_server()
+        mock_perform_power.assert_called_once_with("ForceRestart")
+
+    @mock.patch.object(ris.RISOperations, '_press_pwr_btn')
+    def test_hold_pwr_btn(self, press_pwr_btn_mock):
+        self.client.hold_pwr_btn()
+        press_pwr_btn_mock.assert_called_once_with(pushType="PressAndHold")
+
+    @mock.patch.object(ris.RISOperations, '_press_pwr_btn')
+    def test_press_pwr_btn(self, press_pwr_btn_mock):
+        self.client.hold_pwr_btn()
+        press_pwr_btn_mock.assert_called_once_with(pushType="PressAndHold")
 
 
 class TestRISOperationsPrivateMethods(testtools.TestCase):
@@ -1502,3 +1679,78 @@ class TestRISOperationsPrivateMethods(testtools.TestCase):
                           self.client._get_persistent_boot_devices)
         check_bios_mock.assert_called_once_with()
         boot_mock.assert_called_once_with(bios_settings)
+
+    @mock.patch.object(ris.RISOperations, '_get_ilo_details', autospec=True)
+    def test__get_firmware_update_service_resource_traverses_manager_as(
+            self, _get_ilo_details_mock):
+        # | GIVEN |
+        manager_mock = mock.MagicMock(spec=dict, autospec=True)
+        _get_ilo_details_mock.return_value = (manager_mock, 'some_uri')
+        # | WHEN |
+        self.client._get_firmware_update_service_resource()
+        # | THEN |
+        manager_mock.__getitem__.assert_called_once_with('Oem')
+        manager_mock.__getitem__().__getitem__.assert_called_once_with('Hp')
+        (manager_mock.__getitem__().__getitem__().__getitem__.
+         assert_called_once_with('links'))
+        (manager_mock.__getitem__().__getitem__().__getitem__().
+         __getitem__.assert_called_once_with('UpdateService'))
+        (manager_mock.__getitem__().__getitem__().__getitem__().
+         __getitem__().__getitem__.assert_called_once_with('href'))
+
+    @mock.patch.object(ris.RISOperations, '_get_ilo_details', autospec=True)
+    def test__get_firmware_update_service_resource_throws_if_not_found(
+            self, _get_ilo_details_mock):
+        # | GIVEN |
+        manager_mock = mock.MagicMock(spec=dict)
+        _get_ilo_details_mock.return_value = (manager_mock, 'some_uri')
+        manager_mock.__getitem__.side_effect = KeyError('not found')
+        # | WHEN | & | THEN |
+        self.assertRaises(exception.IloCommandNotSupportedError,
+                          self.client._get_firmware_update_service_resource)
+
+    @mock.patch.object(ris.RISOperations, '_rest_post')
+    def test_press_pwr_btn(self, rest_post_mock):
+        systems_uri = "/rest/v1/Systems/1"
+        new_pow_settings = {"Action": "PowerButton",
+                            "Target": "/Oem/Hp",
+                            "PushType": "Press"}
+        rest_post_mock.return_value = (200, ris_outputs.GET_HEADERS,
+                                       ris_outputs.REST_POST_RESPONSE)
+        self.client._press_pwr_btn()
+        rest_post_mock.assert_called_once_with(systems_uri, None,
+                                               new_pow_settings)
+
+    @mock.patch.object(ris.RISOperations, '_rest_post')
+    def test_press_pwr_btn_patch_fail(self, rest_post_mock):
+        systems_uri = "/rest/v1/Systems/1"
+        new_pow_settings = {"Action": "PowerButton",
+                            "Target": "/Oem/Hp",
+                            "PushType": "Press"}
+        rest_post_mock.return_value = (301, ris_outputs.GET_HEADERS,
+                                       ris_outputs.REST_FAILURE_OUTPUT)
+        self.assertRaises(exception.IloError,
+                          self.client._press_pwr_btn, 'Press')
+        rest_post_mock.assert_called_once_with(systems_uri, None,
+                                               new_pow_settings)
+
+    @mock.patch.object(ris.RISOperations, '_rest_post')
+    def test_perform_power_op(self, rest_post_mock):
+        systems_uri = "/rest/v1/Systems/1"
+        new_pow_settings = {"Action": "Reset", "ResetType": "ForceRestart"}
+        rest_post_mock.return_value = (200, ris_outputs.GET_HEADERS,
+                                       ris_outputs.REST_POST_RESPONSE)
+        self.client.reset_server()
+        rest_post_mock.assert_called_once_with(systems_uri, None,
+                                               new_pow_settings)
+
+    @mock.patch.object(ris.RISOperations, '_rest_post')
+    def test_perform_power_op_fail(self, rest_post_mock):
+        systems_uri = "/rest/v1/Systems/1"
+        new_pow_settings = {"Action": "Reset", "ResetType": "ForceRestart"}
+        rest_post_mock.return_value = (301, ris_outputs.GET_HEADERS,
+                                       ris_outputs.REST_FAILURE_OUTPUT)
+        self.assertRaises(exception.IloError,
+                          self.client.reset_server)
+        rest_post_mock.assert_called_once_with(systems_uri, None,
+                                               new_pow_settings)

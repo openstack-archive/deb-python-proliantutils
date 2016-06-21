@@ -32,10 +32,14 @@ SUPPORTED_RIS_METHODS = [
     'get_product_name',
     'get_secure_boot_mode',
     'get_vm_status',
+    'hold_pwr_btn',
     'insert_virtual_media',
+    'press_pwr_btn',
     'reset_bios_to_default',
     'reset_ilo_credential',
     'reset_secure_boot_keys',
+    'reset_server',
+    'set_host_power',
     'set_http_boot_url',
     'set_one_time_boot',
     'set_pending_boot_mode',
@@ -43,6 +47,7 @@ SUPPORTED_RIS_METHODS = [
     'get_server_capabilities',
     'set_iscsi_boot_info',
     'set_vm_status',
+    'update_firmware',
     'update_persistent_boot',
     ]
 
@@ -356,9 +361,15 @@ class IloClient(operations.IloOperations):
             data = self.ribcl.get_host_health_data()
             gpu = self.ribcl._get_number_of_gpu_devices_connected(data)
             capabilities.update(gpu)
+            major_minor = self.ris.get_ilo_firmware_version_as_major_minor()
         else:
             capabilities = self.ribcl.get_server_capabilities()
-        nic_capacity = ipmi.get_nic_capacity(self.info)
+            major_minor = self.ribcl.get_ilo_firmware_version_as_major_minor()
+
+        # NOTE(vmud213): Even if it is None, pass it on to get_nic_capacity
+        # as we still want to try getting nic capacity through ipmitool
+        # irrespective of what firmware we are using.
+        nic_capacity = ipmi.get_nic_capacity(self.info, major_minor)
         if nic_capacity:
             capabilities.update({'nic_capacity': nic_capacity})
         if capabilities:
@@ -373,3 +384,16 @@ class IloClient(operations.IloOperations):
                  on the server.
         """
         return self._call_method('activate_license', key)
+
+    def update_firmware(self, firmware_url, component_type):
+        """Updates the given firmware on the server
+
+        :param firmware_url: location of the firmware
+        :param component_type: Type of component to be applied to.
+        :raises: InvalidInputError, if the validation of the input fails
+        :raises: IloError, on an error from iLO
+        :raises: IloCommandNotSupportedError, if the command is
+                 not supported on the server
+        """
+        return self._call_method(
+            'update_firmware', firmware_url, component_type)
