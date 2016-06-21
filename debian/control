@@ -36,7 +36,7 @@ Build-Depends-Indep: python-coverage,
                      python3-testtools (>= 1.4.0),
                      subunit,
                      testrepository,
-Standards-Version: 3.9.6
+Standards-Version: 3.9.8
 Vcs-Browser: https://anonscm.debian.org/cgit/openstack/python-proliantutils.git/
 Vcs-Git: https://anonscm.debian.org/git/openstack/python-proliantutils.git
 Homepage: https://github.com/openstack/proliantutils
