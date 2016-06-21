@@ -3,7 +3,9 @@ Upstream-Name: proliantutils
 Source: https://github.com/openstack/proliantutils
 
 Files: *
-Copyright: (c) 2014, Hewlett Packard <proliantutils@gmail.com>
+Copyright: (c) 2012-2016, Hewlett Packard <proliantutils@gmail.com>
+           (c) 2012, NTT DOCOMO, INC.
+           (c) 2014, IBM
 License: Apache-2
 
 Files: debian/*
