@@ -2,12 +2,12 @@ Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: proliantutils
 Source: https://github.com/openstack/proliantutils
 
-Files: debian/*
-Copyright: (c) 2014, Thomas Goirand <zigo@debian.org>
-License: Apache-2
-
 Files: *
 Copyright: (c) 2014, Hewlett Packard <proliantutils@gmail.com>
+License: Apache-2
+
+Files: debian/*
+Copyright: (c) 2014, Thomas Goirand <zigo@debian.org>
 License: Apache-2
 
 License: Apache-2
