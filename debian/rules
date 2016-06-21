@@ -1,11 +1,7 @@
 #!/usr/bin/make -f
 
-PYTHONS:=$(shell pyversions -vr)
-#PYTHON3S:=$(shell py3versions -vr)
-
 UPSTREAM_GIT := https://github.com/openstack/proliantutils.git
 include /usr/share/openstack-pkg-tools/pkgos.make
-export OSLO_PACKAGE_VERSION=$(VERSION)
 
 %:
 	dh $@ --buildsystem=python_distutils --with python2,sphinxdoc
