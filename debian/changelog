@@ -9,6 +9,7 @@ python-proliantutils (2.1.8-1) unstable; urgency=medium
   * Fixed (build-)depends for this release (Closes: #827831).
   * Fixed debian/copyright ordering and holders.
   * Standards-Version is now 3.9.8 (no change).
+  * Added Python 3 support.
 
  -- Thomas Goirand <zigo@debian.org>  Tue, 21 Jun 2016 17:48:19 +0200
 
