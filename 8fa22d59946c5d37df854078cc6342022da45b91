@@ -1,0 +1,8 @@
+Code-Review+2: Thomas Goirand <thomas@goirand.fr>
+Workflow+1: Thomas Goirand <thomas@goirand.fr>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 20 Sep 2016 13:17:43 +0000
+Reviewed-on: https://review.openstack.org/373257
+Project: openstack/deb-python-proliantutils
+Branch: refs/heads/debian/newton
