@@ -496,19 +496,25 @@ class PhysicalDriveTest(testtools.TestCase):
 
         get_all_details_mock.return_value = raid_constants.HPSSA_DRIVES_SSD
         server = objects.Server()
-        d = server.controllers[0].unassigned_physical_drives[0]
-        d = [x for x in server.controllers[0].unassigned_physical_drives
-             if x.id == '6I:1:7']
-        ret = d[0].get_physical_drive_dict()
-        self.assertEqual(200, ret['size_gb'])
+        d = [x for x in server.controllers[0].unassigned_physical_drives]
+        drives = sorted((x for x in d),
+                        key=lambda x: x.get_physical_drive_dict()['id'])
+        ret_sas = drives[0].get_physical_drive_dict()
+        ret_sata = drives[1].get_physical_drive_dict()
+
+        self.assertEqual(200, ret_sas['size_gb'])
         self.assertEqual('Smart Array P822 in Slot 2',
-                         ret['controller'])
-        self.assertEqual('6I:1:7', ret['id'])
-        self.assertEqual('ssd', ret['disk_type'])
-        self.assertEqual('sas', ret['interface_type'])
-        self.assertEqual('HP      EF0600FARNA', ret['model'])
-        self.assertEqual('HPD6', ret['firmware'])
-        self.assertEqual('ready', ret['status'])
+                         ret_sas['controller'])
+        self.assertEqual('6I:1:7', ret_sas['id'])
+        self.assertEqual('ssd', ret_sas['disk_type'])
+        self.assertEqual('sas', ret_sas['interface_type'])
+        self.assertEqual('HP      EF0600FARNA', ret_sas['model'])
+        self.assertEqual('HPD6', ret_sas['firmware'])
+        self.assertEqual('ready', ret_sas['status'])
+
+        self.assertEqual('6I:1:8', ret_sata['id'])
+        self.assertEqual('ssd', ret_sata['disk_type'])
+        self.assertEqual('sata', ret_sata['interface_type'])
 
     def test_get_physical_drive_dict_part_of_array(self, get_all_details_mock):
 
@@ -570,3 +576,17 @@ class PrivateMethodsTestCase(testtools.TestCase):
                           objects._hpssacli, "foo", "bar",
                           dont_transform_to_hpssa_exception=True)
         execute_mock.assert_called_once_with("hpssacli", "foo", "bar")
+
+    @mock.patch.object(processutils, 'execute')
+    def test__hpssacli_raises_error_no_controller(self, execute_mock):
+        value = ("Error: No controllers detected. Possible causes:"
+                 " The driver for the installed controller(s) is not loaded."
+                 " On LINUX, the scsi_generic (sg) driver module is not"
+                 " loaded. See the README file for more details.")
+        execute_mock.side_effect = processutils.ProcessExecutionError(
+            value)
+        ex = self.assertRaises(exception.HPSSAOperationError,
+                               objects._hpssacli, "foo", "bar")
+        msg = ("HPSSA controller not found. Enable hpssa controller"
+               " to continue with the desired operation")
+        self.assertIn(msg, str(ex))

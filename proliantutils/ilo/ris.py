@@ -48,6 +48,19 @@ POWER_STATE = {
     'OFF': 'ForceOff',
 }
 
+# The PCI standards mention following categories of PCI devices as
+# GPU devices.
+# Base Class Code 03 indicate VGA devices
+# Sub Class Code
+#     00h: VGA-compatible controller
+#     01h:  XGA controller
+#     02h:  3D controller
+#     80h:  Other display controller
+# RIS data reports the SubclassCode in integer rather than in hexadecimal form.
+
+CLASSCODE_FOR_GPU_DEVICES = [3]
+SUBCLASSCODE_FOR_GPU_DEVICES = [0, 1, 2, 128]
+
 LOG = log.get_logger(__name__)
 
 
@@ -107,8 +120,7 @@ class RISOperations(operations.IloOperations):
             try:
                 response = request_method(url.geturl(), **kwargs)
             except Exception as e:
-                LOG.exception(self._("An error occurred while "
-                                     "contacting iLO. Error: %s"), e)
+                LOG.debug(self._("Unable to connect to iLO. %s"), e)
                 raise exception.IloConnectionError(e)
 
             # NOTE:Do not assume every HTTP operation will return a JSON body.
@@ -129,9 +141,9 @@ class RISOperations(operations.IloOperations):
         else:
             # Redirected for 5th time. Throw error
             msg = (self._("URL Redirected 5 times continuously. "
-                          "URL incorrect: %(start_url)s") %
+                          "URL used: %(start_url)s") %
                    {'start_url': start_url})
-            LOG.error(msg)
+            LOG.debug(msg)
             raise exception.IloConnectionError(msg)
 
         response_body = {}
@@ -154,7 +166,7 @@ class RISOperations(operations.IloOperations):
                     uncompressed_string = gzipper.read().decode('UTF-8')
                     response_body = json.loads(uncompressed_string)
                 except Exception as e:
-                    LOG.error(self._("Got invalid response "
+                    LOG.debug(self._("Got invalid response "
                                      "'%(response)s' for url %(url)s."),
                               {'url': url.geturl(),
                                'response': response.text})
@@ -375,6 +387,45 @@ class RISOperations(operations.IloOperations):
             msg = ('"links/BIOS" section in ComputerSystem/Oem/Hp'
                    ' does not exist')
             raise exception.IloCommandNotSupportedError(msg)
+
+    def _get_pci_devices(self):
+        """Gets the PCI devices.
+
+        :returns: PCI devices list if the pci resource exist.
+        :raises: IloCommandNotSupportedError if the PCI resource
+            doesn't exist.
+        :raises: IloError, on an error from iLO.
+        """
+
+        system = self._get_host_details()
+        if ('links' in system['Oem']['Hp'] and
+                'PCIDevices' in system['Oem']['Hp']['links']):
+            # Get the PCI URI and Settings
+            pci_uri = system['Oem']['Hp']['links']['PCIDevices']['href']
+            status, headers, pci_device_list = self._rest_get(pci_uri)
+
+            if status >= 300:
+                msg = self._get_extended_error(pci_device_list)
+                raise exception.IloError(msg)
+
+            return pci_device_list
+
+        else:
+            msg = ('links/PCIDevices section in ComputerSystem/Oem/Hp'
+                   ' does not exist')
+            raise exception.IloCommandNotSupportedError(msg)
+
+    def _get_gpu_pci_devices(self):
+        """Returns the list of gpu devices."""
+        pci_device_list = self._get_pci_devices()
+
+        gpu_list = []
+        items = pci_device_list['Items']
+        for item in items:
+            if item['ClassCode'] in CLASSCODE_FOR_GPU_DEVICES:
+                if item['SubclassCode'] in SUBCLASSCODE_FOR_GPU_DEVICES:
+                    gpu_list.append(item)
+        return gpu_list
 
     def _get_bios_settings_resource(self, data):
         """Get the BIOS settings resource."""
@@ -1064,6 +1115,7 @@ class RISOperations(operations.IloOperations):
             system['Oem']['Hp']['Bios']['Current']['VersionString'])
         capabilities['rom_firmware_version'] = rom_firmware_version
         capabilities.update(self._get_ilo_firmware_version())
+        capabilities.update(self._get_number_of_gpu_devices_connected())
         try:
             self.get_secure_boot_mode()
             capabilities['secure_boot'] = 'true'
@@ -1509,8 +1561,8 @@ class RISOperations(operations.IloOperations):
             return
 
         if state == "ERROR":
-            msg = 'Error in firmware update'
-            LOG.error(self._(msg))  # noqa
+            msg = 'Unable to update firmware'
+            LOG.debug(self._(msg))  # noqa
             raise exception.IloError(msg)
         elif state == "UNKNOWN":
             msg = 'Status of firmware update not known'
@@ -1546,3 +1598,9 @@ class RISOperations(operations.IloOperations):
         LOG.debug(self._('Flashing firmware file ... in progress %d%%'),
                   fw_update_progress_percent)
         return fw_update_state, fw_update_progress_percent
+
+    def _get_number_of_gpu_devices_connected(self):
+        """get the number of GPU devices connected."""
+        gpu_devices = self._get_gpu_pci_devices()
+        gpu_devices_count = len(gpu_devices)
+        return {'pci_gpu_devices': gpu_devices_count}
