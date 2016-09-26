@@ -37,8 +37,8 @@ Build-Depends-Indep: python-coverage,
                      subunit,
                      testrepository,
 Standards-Version: 3.9.8
-Vcs-Browser: https://anonscm.debian.org/cgit/openstack/python-proliantutils.git/
-Vcs-Git: https://anonscm.debian.org/git/openstack/python-proliantutils.git
+Vcs-Browser: https://git.openstack.org/cgit/openstack/deb-python-proliantutils?h=debian%2Fnewton
+Vcs-Git: https://git.openstack.org/openstack/deb-python-proliantutils -b debian/newton
 Homepage: https://github.com/openstack/proliantutils
 
 Package: python-proliantutils
