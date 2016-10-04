@@ -1,4 +1,4 @@
-python-proliantutils (2.1.11-2) UNRELEASED; urgency=medium
+python-proliantutils (2.1.11-2) unstable; urgency=medium
 
   * d/s/options: extend-diff-ignore of .gitreview
   * d/control: Using OpenStack's Gerrit as VCS URLs.
